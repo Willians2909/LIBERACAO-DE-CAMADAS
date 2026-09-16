@@ -5,6 +5,9 @@
   var POLL_MS = 5000;
   var SAVE_DEBOUNCE_MS = 700;
   var SAVE_RETRY_MS = 4000;
+  // Intervalo de consolidação do histórico de ensaios (a cada 10 min, por padrão).
+  // Ajustável via window.LC_SNAPSHOT_MS só para testes automatizados.
+  var SNAPSHOT_INTERVAL_MS = window.LC_SNAPSHOT_MS || (10 * 60 * 1000);
 
   var STATUS_LABEL = { liberado:'Liberado', contraprova:'Contraprova', reprovado:'Reprovado', aguardando:'Aguardando', semdados:'Sem pontos' };
   var LAB_LETTER = {aterpa:'A', diefra:'D'};
@@ -12,7 +15,7 @@
   var LAB_NAME = {aterpa:'Aterpa', diefra:'Diefra'};
   var LAB_ORDER = ['pendente','aprovado','reprovado','contraprova'];
 
-  var DEFAULT_STATE = { meta:{ savedAt:null, updatedBy:null }, faixas:[], historico:[], lancamentosArquivados:[] };
+  var DEFAULT_STATE = { meta:{ savedAt:null, updatedBy:null }, faixas:[], historico:[], lancamentosArquivados:[], histSnapshot:{} };
 
   var state = null;
   var isEditor = false;
@@ -20,6 +23,7 @@
   var editorPassword = null;
   var pollTimer = null;
   var saveTimer = null;
+  var snapshotTimer = null;
 
   /* ==================== API ==================== */
   function api(path, opts){
@@ -45,6 +49,7 @@
     if(parsed && Array.isArray(parsed.faixas)){
       if(!Array.isArray(parsed.historico)) parsed.historico = [];
       if(!Array.isArray(parsed.lancamentosArquivados)) parsed.lancamentosArquivados = [];
+      if(!parsed.histSnapshot || typeof parsed.histSnapshot !== 'object') parsed.histSnapshot = {};
       if(!parsed.meta || typeof parsed.meta !== 'object') parsed.meta = {};
       return parsed;
     }
@@ -132,6 +137,7 @@
       hideLoginOverlay();
       stopPolling();
       applyRoleUI();
+      startSnapshotTimer();
       fetchState().then(function(){
         var saudacao = editorName === 'Aline' ? 'Bem-vinda' : 'Bem-vindo';
         showToast(saudacao + ' ' + editorName + '! Modo de edição ativado.');
@@ -144,6 +150,14 @@
   }
 
   function logout(){
+    if(isEditor){
+      // consolida qualquer mudança de ensaio pendente (dentro da janela de 10 min)
+      // antes de sair, para não perder registro por causa do fim da sessão.
+      commitHistorySnapshot();
+      clearTimeout(saveTimer);
+      pushState();
+    }
+    stopSnapshotTimer();
     isEditor = false;
     editorName = null;
     editorPassword = null;
@@ -222,6 +236,13 @@
 
   function pontosOf(f){ return Array.isArray(f.pontos) ? f.pontos : []; }
 
+  // Número da camada é editável à parte do número da faixa e do contador de
+  // lançamento; se ainda não foi definido, mostra o número da faixa como ponto
+  // de partida (mas sem "travar" os dois — dá pra editar de forma independente).
+  function camadaValue(f){
+    return (f.camada !== undefined && f.camada !== null && String(f.camada).trim() !== '') ? f.camada : f.numero;
+  }
+
   function pontoStatus(p){
     if(!p) return 'pendente';
     if(p.aterpa === 'reprovado' || p.diefra === 'reprovado') return 'reprovado';
@@ -264,15 +285,56 @@
     });
   }
 
-  function logHistoricoLancamento(f, de, para){
+  function logHistoricoLancamento(f, de, para, voltou){
     if(!Array.isArray(state.historico)) state.historico = [];
     state.historico.push({
       ts: new Date().toISOString(),
       faixa: f.numero,
-      ponto: 'Novo Lançamento',
+      ponto: voltou ? 'Voltar Lançamento' : 'Novo Lançamento',
       laboratorio: editorName || 'Sala de controle',
-      status: 'Lançamento ' + de + ' arquivado — iniciado Lançamento ' + para
+      status: voltou
+        ? ('Voltou do Lançamento ' + de + ' para o Lançamento ' + para + ' (mapa anterior restaurado)')
+        : ('Lançamento ' + de + ' arquivado — iniciado Lançamento ' + para)
     });
+  }
+
+  // ===== histórico de ensaios: consolidado a cada SNAPSHOT_INTERVAL_MS =====
+  // Em vez de gravar uma linha no histórico a cada clique (o que lotaria o
+  // registro com correções de cliques errados da Aline/João), guardamos o
+  // resultado "ao vivo" normalmente, e só a cada 10 minutos comparamos com a
+  // última fotografia salva (state.histSnapshot) e gravamos no histórico só o
+  // que realmente mudou desde então — incluindo reprovações, mesmo que depois
+  // sejam corrigidas (a reprovação já fica registrada na janela em que ocorreu).
+  function pontoHistKey(faixaId, label){ return faixaId + '::' + (label || ''); }
+
+  function commitHistorySnapshot(){
+    if(!state || !isEditor) return;
+    if(!state.histSnapshot || typeof state.histSnapshot !== 'object') state.histSnapshot = {};
+    state.faixas.forEach(function(f){
+      pontosOf(f).forEach(function(p){
+        var key = pontoHistKey(f.id, p.label);
+        var curA = LAB_ORDER.indexOf(p.aterpa) >= 0 ? p.aterpa : 'pendente';
+        var curD = LAB_ORDER.indexOf(p.diefra) >= 0 ? p.diefra : 'pendente';
+        var last = state.histSnapshot[key];
+        if(!last){
+          // primeira vez que vemos este ponto: só grava a base, sem lançar registro
+          state.histSnapshot[key] = {aterpa:curA, diefra:curD};
+          return;
+        }
+        if(curA !== last.aterpa) logHistorico(f, p.label, 'aterpa', curA);
+        if(curD !== last.diefra) logHistorico(f, p.label, 'diefra', curD);
+        state.histSnapshot[key] = {aterpa:curA, diefra:curD};
+      });
+    });
+    scheduleSave();
+  }
+
+  function startSnapshotTimer(){
+    stopSnapshotTimer();
+    snapshotTimer = setInterval(commitHistorySnapshot, SNAPSHOT_INTERVAL_MS);
+  }
+  function stopSnapshotTimer(){
+    if(snapshotTimer){ clearInterval(snapshotTimer); snapshotTimer = null; }
   }
 
   function escapeHtml(s){
@@ -345,13 +407,17 @@
     var oao = !!f.compOmbreiraOmbreira;
     var isFirst = idx === 0;
     var isLast = idx === (total - 1);
+    var temArquivo = (state.lancamentosArquivados||[]).some(function(l){ return l.faixaId === f.id; });
 
     var out = '<div class="faixa-card status-' + st + '" data-id="' + escapeHtml(f.id) + '">';
     out += '<div class="faixa-row">';
     out += '<div class="meta-block">';
     out += '<div class="cell-faixa"><input class="faixa-num-input" type="text" inputmode="numeric" data-f="numero" value="' + escapeHtml(f.numero) + '">' +
       '<span class="status-pill status-' + st + '">' + STATUS_LABEL[st] + '</span>' +
-      '<span class="lancamento-badge">Lançamento ' + (f.lancamento||1) + '</span></div>';
+      '<span class="camada-lanc-row">' +
+        '<span class="camada-wrap">Camada <input class="camada-input" type="text" data-f="camada" value="' + escapeHtml(camadaValue(f)) + '"></span>' +
+        '<span class="lancamento-badge">Lançamento ' + (f.lancamento||1) + '</span>' +
+      '</span></div>';
     out += '<div class="cell-volume"><input class="cell-input" type="number" min="0" step="1" data-f="volumeM3" value="' + (f.volumeM3||'') + '"></div>';
     out += '<div class="cell-ensaios"><span class="computed-box" data-computed="ensaios">' + ensaiosNecessarios(f) + '</span></div>';
     out += '<div class="cell-oao">' +
@@ -367,15 +433,44 @@
     out += '</div>';
     out += '<div class="row-actions editor-only">' +
       '<button type="button" class="novo-lancamento-btn" data-action="novo-lancamento" title="Novo Lançamento — arquiva este lançamento e recomeça o mapa">🔁</button>' +
+      '<button type="button" class="voltar-lancamento-btn" data-action="voltar-lancamento" title="Voltar ao lançamento anterior — desfaz o último Novo Lançamento"' + (temArquivo ? '' : ' disabled') + '>↩️</button>' +
       '<button type="button" data-action="move-up" title="Mover faixa para cima"' + (isFirst ? ' disabled' : '') + '>▲</button>' +
       '<button type="button" data-action="move-down" title="Mover faixa para baixo"' + (isLast ? ' disabled' : '') + '>▼</button>' +
       '<button type="button" class="remove-faixa-btn" data-action="remove-faixa" title="Remover faixa">×</button>' +
       '</div>';
     out += '</div>';
+    out += lancamentosAnterioresHtml(f);
     out += '<div class="obs-row"><div class="obs-row-label">Observação (opcional)</div><textarea data-f="observacao">' + escapeHtml(f.observacao||'') + '</textarea></div>';
     out += '<div class="row-footer"><span>' + relTime(f.atualizadoEm) + '</span></div>';
     out += '</div>';
     return out;
+  }
+
+  // Lista, de forma só-leitura e visível para todos (não é editor-only), os
+  // lançamentos já arquivados desta faixa — assim quem só acompanha também
+  // consegue ver como ficou o fechamento de um lançamento anterior.
+  function historyPontoChipHtml(p){
+    var a = LAB_ORDER.indexOf(p.aterpa) >= 0 ? p.aterpa : 'pendente';
+    var d = LAB_ORDER.indexOf(p.diefra) >= 0 ? p.diefra : 'pendente';
+    var titleA = 'Aterpa: ' + LAB_FULL[a] + (p.aterpaEm ? ' em ' + fmtDateTime(p.aterpaEm) : '');
+    var titleD = 'Diefra: ' + LAB_FULL[d] + (p.diefraEm ? ' em ' + fmtDateTime(p.diefraEm) : '');
+    return '<span class="hist-chip"><b>' + escapeHtml(p.label||'') + '</b>' +
+      '<span class="hist-l st-' + a + '" title="' + escapeHtml(titleA) + '">A</span>' +
+      '<span class="hist-l st-' + d + '" title="' + escapeHtml(titleD) + '">D</span></span>';
+  }
+
+  function lancamentosAnterioresHtml(f){
+    var arquivados = (state.lancamentosArquivados||[]).filter(function(l){ return l.faixaId === f.id; });
+    if(!arquivados.length) return '';
+    var itens = arquivados.slice().reverse().map(function(l){
+      var camadaTxt = (l.camada !== undefined && l.camada !== null && String(l.camada).trim() !== '') ? (' · Camada ' + escapeHtml(l.camada)) : '';
+      return '<div class="lanc-hist-item">' +
+        '<div class="lanc-hist-head">Lançamento ' + l.lancamento + camadaTxt +
+        '<span class="lanc-hist-meta">arquivado em ' + fmtDateTime(l.arquivadoEm) + ' · Compact. Ombr-Ombr: ' + (l.compOmbreiraOmbreira ? 'SIM' : 'NÃO') + '</span></div>' +
+        '<div class="lanc-hist-map">' + l.pontos.map(historyPontoChipHtml).join('') + '</div>' +
+        '</div>';
+    }).join('');
+    return '<details class="lanc-history"><summary>Ver lançamentos anteriores (' + arquivados.length + ')</summary>' + itens + '</details>';
   }
 
   function pontoChipHtml(p, idx){
@@ -443,6 +538,7 @@
       if(!f) return;
       var el = e.target;
       if(el.matches('[data-f="numero"]')){ f.numero = el.value; touch(f); return; }
+      if(el.matches('[data-f="camada"]')){ f.camada = el.value; touch(f); return; }
       if(el.matches('[data-f="volumeM3"]')){ f.volumeM3 = el.value === '' ? 0 : Number(el.value); touch(f); refreshRowVisuals(card, f); return; }
       if(el.matches('[data-f="observacao"]')){ f.observacao = el.value; touch(f); return; }
       if(el.matches('[data-ponto-label]')){
@@ -477,7 +573,10 @@
         var nowIso = new Date().toISOString();
         p2[lab2] = novo;
         p2[lab2 + 'Em'] = novo === 'pendente' ? null : nowIso;
-        logHistorico(f, p2.label, lab2, novo);
+        // O resultado "ao vivo" muda na hora (todo mundo já vê isso na tela);
+        // o registro no histórico de ensaios (para o Excel) é consolidado a
+        // cada 10 min por commitHistorySnapshot(), pra não lotar o histórico
+        // com cliques errados que são corrigidos na sequência.
         var wrap = e.target.closest('.letter-wrap');
         var badge = wrap.querySelector('.letter-badge');
         var novoTitle = LAB_NAME[lab2] + ': ' + LAB_FULL[novo] + (p2[lab2+'Em'] ? ' em ' + fmtDateTime(p2[lab2+'Em']) : '') + ' (toque para escolher)';
@@ -543,6 +642,8 @@
         moveFaixa(f.id, 1);
       } else if(action === 'novo-lancamento'){
         novoLancamento(f);
+      } else if(action === 'voltar-lancamento'){
+        voltarLancamentoAnterior(f);
       }
     };
   }
@@ -574,7 +675,7 @@
     if(!num) return;
     var id = nextFaixaId();
     state.faixas.push({
-      id:id, numero:num, volumeM3:0, compOmbreiraOmbreira:false, lancamento:1,
+      id:id, numero:num, camada:num, volumeM3:0, compOmbreiraOmbreira:false, lancamento:1,
       pontos: defaultPontosForCount(5, num),
       observacao:'', atualizadoEm:new Date().toISOString()
     });
@@ -595,10 +696,15 @@
       'O mapa de ensaios do Lançamento ' + atual + ' fica arquivado (com os horários de cada aprovação) e um mapa novo começa para o Lançamento ' + (atual+1) + '.' + aviso;
     if(!confirm(msg)) return;
 
+    // consolida o histórico de ensaios deste lançamento antes de arquivar,
+    // pra não perder nenhuma mudança pendente na janela de 10 minutos.
+    commitHistorySnapshot();
+
     if(!Array.isArray(state.lancamentosArquivados)) state.lancamentosArquivados = [];
     state.lancamentosArquivados.push({
       faixaId: f.id,
       faixaNumero: f.numero,
+      camada: camadaValue(f),
       lancamento: atual,
       volumeM3: f.volumeM3,
       compOmbreiraOmbreira: !!f.compOmbreiraOmbreira,
@@ -614,6 +720,38 @@
     touch(f);
     render();
     showToast('Lançamento ' + (atual+1) + ' iniciado na Faixa ' + f.numero + '.');
+  }
+
+  // "Voltar Lançamento Anterior": desfaz o último Novo Lançamento desta faixa,
+  // restaurando o mapa de ensaios (e a camada/compactação de ombreira) do
+  // lançamento arquivado mais recente, para conferir ou corrigir o fechamento
+  // anterior. O lançamento arquivado sai da lista (volta a ser o mapa "ao vivo").
+  function voltarLancamentoAnterior(f){
+    var arquivados = state.lancamentosArquivados || [];
+    var idx = -1;
+    for(var i = arquivados.length - 1; i >= 0; i--){
+      if(arquivados[i].faixaId === f.id){ idx = i; break; }
+    }
+    if(idx < 0){ showToast('Não há lançamento anterior arquivado nesta faixa.'); return; }
+    var arq = arquivados[idx];
+    var atual = f.lancamento || 1;
+    var msg = 'Voltar a Faixa ' + f.numero + ' para o Lançamento ' + arq.lancamento + '?\n\n' +
+      'O mapa atual do Lançamento ' + atual + ' será substituído pelo mapa arquivado do Lançamento ' + arq.lancamento + ', para você conferir ou corrigir o fechamento anterior.';
+    if(!confirm(msg)) return;
+
+    commitHistorySnapshot();
+    logHistoricoLancamento(f, atual, arq.lancamento, true);
+
+    f.lancamento = arq.lancamento;
+    f.pontos = JSON.parse(JSON.stringify(arq.pontos));
+    f.compOmbreiraOmbreira = !!arq.compOmbreiraOmbreira;
+    if(arq.volumeM3 !== undefined && arq.volumeM3 !== null) f.volumeM3 = arq.volumeM3;
+    if(arq.camada !== undefined && arq.camada !== null) f.camada = arq.camada;
+    arquivados.splice(idx, 1);
+
+    touch(f);
+    render();
+    showToast('Faixa ' + f.numero + ' voltou para o Lançamento ' + arq.lancamento + '.');
   }
 
   /* ==================== baixar Excel ==================== */
@@ -638,10 +776,11 @@
     return cols.map(function(h){ return {v:h, t:'s', s:{font:{bold:true, color:{rgb:'FFFFFF'}}, fill:{patternType:'solid', fgColor:{rgb:'333333'}}}}; });
   }
 
-  function pontoDetailRow(faixaNumero, lancamentoLabel, p){
+  function pontoDetailRow(faixaNumero, camada, lancamentoLabel, p){
     var ps = pontoStatus(p);
     return [
       {v:'Faixa '+faixaNumero, t:'s'},
+      {v: camada !== undefined && camada !== null ? String(camada) : '', t:'s'},
       {v:lancamentoLabel, t:'s'},
       {v:p.label||'', t:'s'},
       styledCell(LAB_FULL[p.aterpa]||'Pendente', p.aterpa||'pendente'),
@@ -655,14 +794,18 @@
   function downloadExcel(){
     if(!isEditor){ showToast('Faça login para baixar o Excel.'); return; }
     if(typeof XLSX === 'undefined'){ showToast('Biblioteca de Excel não carregou.'); return; }
+    // consolida qualquer mudança de ensaio pendente antes de gerar a planilha,
+    // pra o download sempre sair com o histórico mais atualizado possível.
+    commitHistorySnapshot();
     var faixas = state.faixas;
 
-    var resumoRows = [headerRow(['Faixa','Lançamento atual','Volume (m³)','Ensaios (pontos no mapa)','Compactação de Ombreira a Ombreira','Status da faixa','Observação'])];
+    var resumoRows = [headerRow(['Faixa','Camada','Lançamento atual','Volume (m³)','Ensaios (pontos no mapa)','Compactação de Ombreira a Ombreira','Status da faixa','Observação'])];
     faixas.forEach(function(f){
       var st = faixaStatus(f);
       var oao = !!f.compOmbreiraOmbreira;
       resumoRows.push([
         {v:'Faixa '+f.numero, t:'s'},
+        {v:String(camadaValue(f)), t:'s'},
         {v:'Lançamento ' + (f.lancamento||1), t:'s'},
         {v:Number(f.volumeM3)||0, t:'n'},
         {v:ensaiosNecessarios(f), t:'n'},
@@ -672,17 +815,17 @@
       ]);
     });
     var wsResumo = XLSX.utils.aoa_to_sheet(resumoRows);
-    wsResumo['!cols'] = [{wch:10},{wch:16},{wch:13},{wch:16},{wch:20},{wch:16},{wch:36}];
+    wsResumo['!cols'] = [{wch:10},{wch:10},{wch:16},{wch:13},{wch:16},{wch:20},{wch:16},{wch:36}];
 
-    var detRows = [headerRow(['Faixa','Lançamento','Ponto','Aterpa','Horário Aterpa','Diefra','Horário Diefra','Status do ponto'])];
+    var detRows = [headerRow(['Faixa','Camada','Lançamento','Ponto','Aterpa','Horário Aterpa','Diefra','Horário Diefra','Status do ponto'])];
     faixas.forEach(function(f){
       (state.lancamentosArquivados||[]).filter(function(l){ return l.faixaId === f.id; }).forEach(function(l){
-        l.pontos.forEach(function(p){ detRows.push(pontoDetailRow(f.numero, 'Lançamento ' + l.lancamento, p)); });
+        l.pontos.forEach(function(p){ detRows.push(pontoDetailRow(f.numero, l.camada !== undefined && l.camada !== null ? l.camada : f.numero, 'Lançamento ' + l.lancamento, p)); });
       });
-      pontosOf(f).forEach(function(p){ detRows.push(pontoDetailRow(f.numero, 'Lançamento ' + (f.lancamento||1), p)); });
+      pontosOf(f).forEach(function(p){ detRows.push(pontoDetailRow(f.numero, camadaValue(f), 'Lançamento ' + (f.lancamento||1), p)); });
     });
     var wsDet = XLSX.utils.aoa_to_sheet(detRows);
-    wsDet['!cols'] = [{wch:10},{wch:14},{wch:12},{wch:14},{wch:17},{wch:14},{wch:17},{wch:18}];
+    wsDet['!cols'] = [{wch:10},{wch:10},{wch:14},{wch:12},{wch:14},{wch:17},{wch:14},{wch:17},{wch:18}];
 
     // Histórico acumulado — cada aprovação/reprovação/contraprova, cada escolha de
     // Compactação de Ombreira a Ombreira e cada Novo Lançamento fica registrado
@@ -725,13 +868,14 @@
   function buildPrintTable(){
     var faixas = state.faixas;
     var html = '<table class="print-table"><thead><tr>' +
-      '<th>Faixa</th><th>Lanç.</th><th>Volume (m³)</th><th>Ensaios</th><th>Compact. Ombr-Ombr</th><th>Status</th><th>Mapa de ensaios (A=Aterpa, D=Diefra)</th>' +
+      '<th>Faixa</th><th>Camada</th><th>Lanç.</th><th>Volume (m³)</th><th>Ensaios</th><th>Compact. Ombr-Ombr</th><th>Status</th><th>Mapa de ensaios (A=Aterpa, D=Diefra)</th>' +
       '</tr></thead><tbody>';
     faixas.forEach(function(f){
       var st = faixaStatus(f);
       var oao = !!f.compOmbreiraOmbreira;
       html += '<tr class="pt-status-' + st + '">' +
         '<td class="pt-num">' + escapeHtml(f.numero) + '</td>' +
+        '<td>' + escapeHtml(camadaValue(f)) + '</td>' +
         '<td>' + (f.lancamento||1) + '</td>' +
         '<td>' + (f.volumeM3 ? Number(f.volumeM3).toLocaleString('pt-BR') : '—') + '</td>' +
         '<td>' + ensaiosNecessarios(f) + '</td>' +
@@ -756,6 +900,7 @@
   function boot(){
     restoreSession();
     applyRoleUI();
+    if(isEditor) startSnapshotTimer();
 
     document.getElementById('excelBtn').addEventListener('click', downloadExcel);
     document.getElementById('printBtn').addEventListener('click', printPage);
