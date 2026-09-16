@@ -1,9 +1,0 @@
-{
-  "name": "liberacao-de-camadas",
-  "private": true,
-  "version": "1.0.0",
-  "description": "Liberacao de Camadas - Maravilhas III (Aterpa x Diefra)",
-  "dependencies": {
-    "@netlify/blobs": "^11.1.0"
-  }
-}
