@@ -1,0 +1,14 @@
+[build]
+  publish = "."
+  command = "npm install"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# HTML principal e os assets são estáticos; as únicas rotas dinâmicas são as
+# funções abaixo, publicadas em /api/* pelo "config.path" de cada função.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
