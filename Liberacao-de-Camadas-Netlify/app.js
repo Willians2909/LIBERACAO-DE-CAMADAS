@@ -253,21 +253,28 @@
 
   // Status 100% automático a partir do mapa de ensaios — a escolha manual de
   // Compactação de Ombreira a Ombreira NÃO libera a faixa por si só.
-  function faixaStatus(f){
-    var pontos = pontosOf(f);
-    if(!pontos.length) return 'semdados';
+  function statusFromPontos(pontos){
+    if(!pontos || !pontos.length) return 'semdados';
     var statuses = pontos.map(pontoStatus);
     if(statuses.indexOf('reprovado') >= 0) return 'reprovado';
     if(statuses.indexOf('contraprova') >= 0) return 'contraprova';
     if(statuses.every(function(s){ return s === 'aprovado'; })) return 'liberado';
     return 'aguardando';
   }
+  function faixaStatus(f){ return statusFromPontos(pontosOf(f)); }
 
+  // Toda linha do histórico carrega também a Camada e o Lançamento vigentes
+  // no momento do registro — assim, ao filtrar/procurar por um número de
+  // camada na planilha, aparece exatamente como ficaram os ensaios daquela
+  // camada (a última atualização registrada para ela), mesmo que a faixa já
+  // tenha passado por outras camadas/lançamentos depois.
   function logHistorico(faixa, pontoLabel, lab, novoStatus){
     if(!Array.isArray(state.historico)) state.historico = [];
     state.historico.push({
       ts: new Date().toISOString(),
       faixa: faixa.numero,
+      camada: camadaValue(faixa),
+      lancamento: faixa.lancamento || 1,
       ponto: pontoLabel || '',
       laboratorio: LAB_NAME[lab] || lab,
       status: LAB_FULL[novoStatus] || novoStatus
@@ -279,6 +286,8 @@
     state.historico.push({
       ts: new Date().toISOString(),
       faixa: faixa.numero,
+      camada: camadaValue(faixa),
+      lancamento: faixa.lancamento || 1,
       ponto: 'Compactação de Ombreira a Ombreira',
       laboratorio: editorName || 'Sala de controle',
       status: novoValor ? 'SIM' : 'NÃO'
@@ -290,6 +299,8 @@
     state.historico.push({
       ts: new Date().toISOString(),
       faixa: f.numero,
+      camada: camadaValue(f),
+      lancamento: de,
       ponto: voltou ? 'Voltar Lançamento' : 'Novo Lançamento',
       laboratorio: editorName || 'Sala de controle',
       status: voltou
@@ -830,18 +841,23 @@
     // Histórico acumulado — cada aprovação/reprovação/contraprova, cada escolha de
     // Compactação de Ombreira a Ombreira e cada Novo Lançamento fica registrado
     // aqui, com data e hora, e vai se acumulando enquanto o sistema for usado.
-    var histRows = [headerRow(['Data/Hora','Faixa','Ponto','Laboratório','Novo status'])];
+    // Cada linha carrega também a Camada e o Lançamento vigentes no momento —
+    // assim dá pra filtrar/procurar por um número de camada e ver como ficaram
+    // os ensaios dela (a última atualização registrada para aquela camada).
+    var histRows = [headerRow(['Data/Hora','Faixa','Camada','Lançamento','Ponto','Laboratório','Novo status'])];
     (state.historico||[]).forEach(function(h){
       histRows.push([
         {v:fmtDateTime(h.ts), t:'s'},
         {v:'Faixa '+h.faixa, t:'s'},
+        {v: h.camada !== undefined && h.camada !== null ? String(h.camada) : '', t:'s'},
+        {v: h.lancamento !== undefined && h.lancamento !== null ? ('Lançamento ' + h.lancamento) : '', t:'s'},
         {v:h.ponto||'', t:'s'},
         {v:h.laboratorio||'', t:'s'},
         {v:h.status||'', t:'s'}
       ]);
     });
     var wsHist = XLSX.utils.aoa_to_sheet(histRows);
-    wsHist['!cols'] = [{wch:17},{wch:10},{wch:26},{wch:16},{wch:40}];
+    wsHist['!cols'] = [{wch:17},{wch:10},{wch:10},{wch:14},{wch:26},{wch:16},{wch:40}];
 
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo');
@@ -857,7 +873,7 @@
     return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
   }
 
-  /* ==================== imprimir / PDF (1 folha A4 retrato) ==================== */
+  /* ==================== imprimir / PDF (1 folha A4 retrato, com período) ==================== */
   function pontoPrintChip(p){
     var a = LAB_ORDER.indexOf(p.aterpa) >= 0 ? p.aterpa : 'pendente';
     var d = LAB_ORDER.indexOf(p.diefra) >= 0 ? p.diefra : 'pendente';
@@ -865,35 +881,137 @@
       '<span class="pp-l st-' + a + '">A</span><span class="pp-l st-' + d + '">D</span></span>';
   }
 
-  function buildPrintTable(){
+  // Cada faixa pode ter passado por vários lançamentos (várias camadas) no
+  // mesmo dia — pra relatório/impressão, cada lançamento (arquivado ou o
+  // atual) vira sua própria linha, com a data de referência usada pra
+  // filtrar por período (arquivadoEm para os arquivados; o horário mais
+  // recente de aprovação/reprovação registrado nos pontos para o atual).
+  function faixaLancamentoRows(f){
+    var rows = [];
+    (state.lancamentosArquivados||[]).filter(function(l){ return l.faixaId === f.id; }).forEach(function(l){
+      rows.push({
+        faixaNumero: f.numero,
+        camada: (l.camada !== undefined && l.camada !== null && String(l.camada).trim() !== '') ? l.camada : f.numero,
+        lancamento: l.lancamento,
+        volumeM3: l.volumeM3,
+        compOmbreiraOmbreira: l.compOmbreiraOmbreira,
+        pontos: l.pontos || [],
+        refDate: l.arquivadoEm ? new Date(l.arquivadoEm) : null
+      });
+    });
+    var pontosAtuais = pontosOf(f);
+    var maxPontoTs = null;
+    pontosAtuais.forEach(function(p){
+      [p.aterpaEm, p.diefraEm].forEach(function(ts){
+        if(!ts) return;
+        var d = new Date(ts);
+        if(!maxPontoTs || d > maxPontoTs) maxPontoTs = d;
+      });
+    });
+    var refAtual = maxPontoTs || (f.atualizadoEm ? new Date(f.atualizadoEm) : null);
+    rows.push({
+      faixaNumero: f.numero,
+      camada: camadaValue(f),
+      lancamento: f.lancamento || 1,
+      volumeM3: f.volumeM3,
+      compOmbreiraOmbreira: f.compOmbreiraOmbreira,
+      pontos: pontosAtuais,
+      refDate: refAtual
+    });
+    return rows;
+  }
+
+  function fmtDateOnly(ymd){
+    var parts = String(ymd||'').split('-');
+    if(parts.length !== 3) return ymd || '';
+    return parts[2] + '/' + parts[1] + '/' + parts[0];
+  }
+
+  function parseRangeBounds(startStr, endStr){
+    return {
+      startD: startStr ? new Date(startStr + 'T00:00:00') : null,
+      endD: endStr ? new Date(endStr + 'T23:59:59.999') : null
+    };
+  }
+
+  function dateInRange(date, startD, endD){
+    if(!date) return false;
+    if(startD && date < startD) return false;
+    if(endD && date > endD) return false;
+    return true;
+  }
+
+  function buildPrintTable(startStr, endStr){
+    var filtering = !!(startStr || endStr);
+    var bounds = parseRangeBounds(startStr, endStr);
     var faixas = state.faixas;
     var html = '<table class="print-table"><thead><tr>' +
       '<th>Faixa</th><th>Camada</th><th>Lanç.</th><th>Volume (m³)</th><th>Ensaios</th><th>Compact. Ombr-Ombr</th><th>Status</th><th>Mapa de ensaios (A=Aterpa, D=Diefra)</th>' +
       '</tr></thead><tbody>';
+    var anyRow = false;
     faixas.forEach(function(f){
-      var st = faixaStatus(f);
-      var oao = !!f.compOmbreiraOmbreira;
-      html += '<tr class="pt-status-' + st + '">' +
-        '<td class="pt-num">' + escapeHtml(f.numero) + '</td>' +
-        '<td>' + escapeHtml(camadaValue(f)) + '</td>' +
-        '<td>' + (f.lancamento||1) + '</td>' +
-        '<td>' + (f.volumeM3 ? Number(f.volumeM3).toLocaleString('pt-BR') : '—') + '</td>' +
-        '<td>' + ensaiosNecessarios(f) + '</td>' +
-        '<td>' + (oao ? 'SIM' : 'NÃO') + '</td>' +
-        '<td><span class="pt-pill status-' + st + '">' + STATUS_LABEL[st] + '</span></td>' +
-        '<td>' + pontosOf(f).map(pontoPrintChip).join(' ') + '</td>' +
-        '</tr>';
+      var rows = faixaLancamentoRows(f);
+      if(filtering){
+        rows = rows.filter(function(r){ return dateInRange(r.refDate, bounds.startD, bounds.endD); });
+      }
+      rows.sort(function(a, b){ return (a.lancamento||0) - (b.lancamento||0); });
+      rows.forEach(function(r){
+        anyRow = true;
+        var st = statusFromPontos(r.pontos);
+        var oao = !!r.compOmbreiraOmbreira;
+        html += '<tr class="pt-status-' + st + '">' +
+          '<td class="pt-num">' + escapeHtml(r.faixaNumero) + '</td>' +
+          '<td>' + escapeHtml(r.camada) + '</td>' +
+          '<td>' + r.lancamento + '</td>' +
+          '<td>' + (r.volumeM3 ? Number(r.volumeM3).toLocaleString('pt-BR') : '—') + '</td>' +
+          '<td>' + (r.pontos ? r.pontos.length : 0) + '</td>' +
+          '<td>' + (oao ? 'SIM' : 'NÃO') + '</td>' +
+          '<td><span class="pt-pill status-' + st + '">' + STATUS_LABEL[st] + '</span></td>' +
+          '<td>' + (r.pontos||[]).map(pontoPrintChip).join(' ') + '</td>' +
+          '</tr>';
+      });
     });
+    if(!anyRow){
+      html += '<tr><td colspan="8" style="text-align:center;padding:18px;color:#777;">Nenhum registro encontrado no período selecionado.</td></tr>';
+    }
     html += '</tbody></table>';
     document.getElementById('printTable').innerHTML = html;
   }
 
-  function printPage(){
+  function printPage(startStr, endStr){
     var now = new Date();
+    var periodoTxt = '';
+    if(startStr || endStr){
+      periodoTxt = ' — período ' + (startStr ? fmtDateOnly(startStr) : '—') + ' a ' + (endStr ? fmtDateOnly(endStr) : '—');
+    }
     document.getElementById('printHeader').textContent =
-      'Liberação de Camadas — Maravilhas III — gerado em ' + fmtDateTime(now.toISOString());
-    buildPrintTable();
+      'Liberação de Camadas — Maravilhas III' + periodoTxt + ' — gerado em ' + fmtDateTime(now.toISOString());
+    buildPrintTable(startStr, endStr);
     window.print();
+  }
+
+  /* ---- modal de período antes de imprimir/gerar PDF (disponível a todos, não só editor) ---- */
+  function showPrintRangeOverlay(){
+    document.getElementById('printStartInput').value = '';
+    document.getElementById('printEndInput').value = '';
+    document.getElementById('printRangeError').classList.remove('show');
+    document.getElementById('printRangeOverlay').style.display = 'flex';
+  }
+  function hidePrintRangeOverlay(){
+    document.getElementById('printRangeOverlay').style.display = 'none';
+  }
+  function confirmPrintRange(){
+    var s = document.getElementById('printStartInput').value || '';
+    var e = document.getElementById('printEndInput').value || '';
+    var errEl = document.getElementById('printRangeError');
+    errEl.classList.remove('show');
+    if(s && e && s > e){
+      errEl.textContent = 'A data inicial não pode ser depois da data final.';
+      errEl.classList.add('show');
+      return;
+    }
+    hidePrintRangeOverlay();
+    printPage(s || null, e || null);
   }
 
   /* ==================== boot ==================== */
@@ -903,7 +1021,9 @@
     if(isEditor) startSnapshotTimer();
 
     document.getElementById('excelBtn').addEventListener('click', downloadExcel);
-    document.getElementById('printBtn').addEventListener('click', printPage);
+    document.getElementById('printBtn').addEventListener('click', showPrintRangeOverlay);
+    document.getElementById('printRangeConfirmBtn').addEventListener('click', confirmPrintRange);
+    document.getElementById('printRangeCancelBtn').addEventListener('click', hidePrintRangeOverlay);
     document.getElementById('loginBtn').addEventListener('click', function(){
       if(isEditor) logout(); else showLoginOverlay();
     });

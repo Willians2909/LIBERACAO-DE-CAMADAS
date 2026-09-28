@@ -304,6 +304,7 @@
   .lock-error{font-size:12.5px; color:var(--bad-solid); font-weight:700; margin-bottom:10px; display:none;}
   .lock-error.show{display:block;}
   .lock-box .btn{width:100%; justify-content:center;}
+  .lock-label{font-size:11.5px; font-weight:700; color:var(--ink-2); display:block; margin:0 0 5px;}
   .toast{
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
     background:var(--ink); color:#fff; font-size:13px; font-weight:600;
@@ -346,6 +347,7 @@
     .brand-row{margin-bottom:2px;}
     .brand-logo-img{height:14px;}
     #printBtn, #excelBtn, #loginBtn, .summary-chip, .sync-badge{display:none !important;}
+    #printRangeOverlay{display:none !important;}
     .print-header{
       display:block; font-size:9px; color:#444; text-align:right; padding:2px 2px 6px;
     }
@@ -416,6 +418,20 @@
     <div class="lock-error" id="loginError"></div>
     <button class="btn btn-primary" id="loginSubmitBtn" type="button">Entrar</button>
     <button class="btn btn-ghost" id="loginCancelBtn" type="button" style="margin-top:8px;">Cancelar</button>
+  </div>
+</div>
+
+<div class="lock-overlay" id="printRangeOverlay" style="display:none;">
+  <div class="lock-box">
+    <h2>Imprimir / PDF</h2>
+    <p>Deixe em branco para ver todos os lançamentos de cada faixa (o atual e os já arquivados, cada um com sua camada). Preencha as datas para restringir o relatório a um período específico.</p>
+    <label class="lock-label" for="printStartInput">Data inicial</label>
+    <input type="date" id="printStartInput" class="lock-input">
+    <label class="lock-label" for="printEndInput">Data final</label>
+    <input type="date" id="printEndInput" class="lock-input">
+    <div class="lock-error" id="printRangeError"></div>
+    <button class="btn btn-primary" id="printRangeConfirmBtn" type="button">Gerar PDF</button>
+    <button class="btn btn-ghost" id="printRangeCancelBtn" type="button" style="margin-top:8px;">Cancelar</button>
   </div>
 </div>
 
