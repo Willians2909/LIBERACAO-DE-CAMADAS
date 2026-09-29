@@ -327,6 +327,47 @@
   }
 
   // ===== espelhamento (best-effort) para o Google Sheets da planilha de premiação =====
+  // Cada linha enviada ao Sheets segue EXATAMENTE o mesmo formato/colunas do
+  // "Detalhe por ponto" do Excel exportado pelo app: Faixa, Camada, Lançamento,
+  // Ponto, Aterpa, Horário Aterpa, Diefra, Horário Diefra, Status do ponto —
+  // nessa mesma sequência (mais um Data/Hora do evento na frente, pra dar pra
+  // saber quando cada linha foi registrada, já que isso é um histórico que só
+  // cresce, não uma foto única por ponto).
+  function sheetsRowFromPonto(f, p){
+    var ps = pontoStatus(p);
+    return {
+      ts: new Date().toISOString(),
+      faixa: 'Faixa ' + f.numero,
+      camada: camadaValue(f) !== undefined && camadaValue(f) !== null ? String(camadaValue(f)) : '',
+      lancamento: 'Lançamento ' + (f.lancamento || 1),
+      ponto: p.label || '',
+      aterpa: LAB_FULL[p.aterpa] || 'Pendente',
+      horarioAterpa: fmtDateTime(p.aterpaEm) || '—',
+      diefra: LAB_FULL[p.diefra] || 'Pendente',
+      horarioDiefra: fmtDateTime(p.diefraEm) || '—',
+      statusPonto: STATUS_LABEL[ps] || ps
+    };
+  }
+
+  // Para eventos que não são um ensaio de ponto (Compactação de Ombreira a
+  // Ombreira, Novo/Voltar Lançamento, Observação), reaproveita as mesmas
+  // colunas: "Ponto" vira o nome do evento e "Status do ponto" vira o
+  // resultado/texto, com Aterpa/Diefra/Horários em branco (—).
+  function sheetsRowEvento(f, nomeEvento, statusTexto){
+    return {
+      ts: new Date().toISOString(),
+      faixa: 'Faixa ' + f.numero,
+      camada: camadaValue(f) !== undefined && camadaValue(f) !== null ? String(camadaValue(f)) : '',
+      lancamento: 'Lançamento ' + (f.lancamento || 1),
+      ponto: nomeEvento || '',
+      aterpa: '—',
+      horarioAterpa: '—',
+      diefra: '—',
+      horarioDiefra: '—',
+      statusPonto: statusTexto || ''
+    };
+  }
+
   // Envia uma cópia das linhas de histórico recém-geradas para o Apps Script já usado
   // pelo app de premiação, numa aba própria (LIBERACAO_CAMADAS_HISTORICO). Isso nunca
   // deve travar nem atrasar o app: se falhar (sem internet, URL não configurada, etc.),
@@ -359,7 +400,7 @@
     if(!state || !isEditor) return;
     if(!state.histSnapshot || typeof state.histSnapshot !== 'object') state.histSnapshot = {};
     if(!Array.isArray(state.historico)) state.historico = [];
-    var startLen = state.historico.length;
+    var sheetsRows = [];
     state.faixas.forEach(function(f){
       pontosOf(f).forEach(function(p){
         var key = pontoHistKey(f.id, p.label);
@@ -371,8 +412,12 @@
           state.histSnapshot[key] = {aterpa:curA, diefra:curD};
           return;
         }
+        var mudou = (curA !== last.aterpa) || (curD !== last.diefra);
         if(curA !== last.aterpa) logHistorico(f, p.label, 'aterpa', curA);
         if(curD !== last.diefra) logHistorico(f, p.label, 'diefra', curD);
+        // Uma linha só por ponto no Sheets (não uma por laboratório), já com o
+        // estado combinado de Aterpa+Diefra — igual ao "Detalhe por ponto" do Excel.
+        if(mudou) sheetsRows.push(sheetsRowFromPonto(f, p));
         state.histSnapshot[key] = {aterpa:curA, diefra:curD};
       });
       // observação da faixa: mesma lógica de consolidação (não grava a cada tecla digitada)
@@ -383,11 +428,11 @@
         state.histSnapshot[obsKey] = curObs;
       } else if(curObs !== lastObs){
         logHistoricoObservacao(f, curObs);
+        sheetsRows.push(sheetsRowEvento(f, 'Observação', curObs || '(em branco)'));
         state.histSnapshot[obsKey] = curObs;
       }
     });
-    var novasEntradas = state.historico.slice(startLen);
-    if(novasEntradas.length) mirrorHistoricoToSheets(novasEntradas);
+    if(sheetsRows.length) mirrorHistoricoToSheets(sheetsRows);
     scheduleSave();
   }
 
@@ -673,7 +718,7 @@
         if(novoOao !== !!f.compOmbreiraOmbreira){
           f.compOmbreiraOmbreira = novoOao;
           logHistoricoOao(f, novoOao);
-          mirrorHistoricoToSheets([state.historico[state.historico.length - 1]]);
+          mirrorHistoricoToSheets([sheetsRowEvento(f, 'Compactação de Ombreira a Ombreira', novoOao ? 'SIM' : 'NÃO')]);
           touch(f);
           var toggle = card.querySelector('[data-computed="oaoToggle"]');
           toggle.querySelector('.sim').classList.toggle('active', f.compOmbreiraOmbreira);
@@ -775,7 +820,7 @@
       arquivadoEm: new Date().toISOString()
     });
     logHistoricoLancamento(f, atual, atual + 1);
-    mirrorHistoricoToSheets([state.historico[state.historico.length - 1]]);
+    mirrorHistoricoToSheets([sheetsRowEvento(f, 'Novo Lançamento', 'Lançamento ' + atual + ' arquivado — iniciado Lançamento ' + (atual + 1))]);
 
     var count = pontosOf(f).length || ensaiosFromVolume(f.volumeM3) || 5;
     f.lancamento = atual + 1;
@@ -805,7 +850,7 @@
 
     commitHistorySnapshot();
     logHistoricoLancamento(f, atual, arq.lancamento, true);
-    mirrorHistoricoToSheets([state.historico[state.historico.length - 1]]);
+    mirrorHistoricoToSheets([sheetsRowEvento(f, 'Voltar Lançamento', 'Voltou do Lançamento ' + atual + ' para o Lançamento ' + arq.lancamento + ' (mapa anterior restaurado)')]);
 
     f.lancamento = arq.lancamento;
     f.pontos = JSON.parse(JSON.stringify(arq.pontos));
