@@ -8,6 +8,10 @@
   // Intervalo de consolidação do histórico de ensaios (a cada 10 min, por padrão).
   // Ajustável via window.LC_SNAPSHOT_MS só para testes automatizados.
   var SNAPSHOT_INTERVAL_MS = window.LC_SNAPSHOT_MS || (10 * 60 * 1000);
+  // URL do Web App do Google Apps Script (mesma planilha da premiação) que recebe uma cópia
+  // do histórico (aprovações/reprovações/contraprova/observações). Opcional: deixe em branco
+  // (window.LC_SHEETS_URL = '') para desativar o espelhamento sem afetar o funcionamento normal.
+  var SHEETS_MIRROR_URL = window.LC_SHEETS_URL || '';
 
   var STATUS_LABEL = { liberado:'Liberado', contraprova:'Contraprova', reprovado:'Reprovado', aguardando:'Aguardando', semdados:'Sem pontos' };
   var LAB_LETTER = {aterpa:'A', diefra:'D'};
@@ -309,6 +313,39 @@
     });
   }
 
+  function logHistoricoObservacao(faixa, novoValor){
+    if(!Array.isArray(state.historico)) state.historico = [];
+    state.historico.push({
+      ts: new Date().toISOString(),
+      faixa: faixa.numero,
+      camada: camadaValue(faixa),
+      lancamento: faixa.lancamento || 1,
+      ponto: 'Observação',
+      laboratorio: editorName || 'Sala de controle',
+      status: novoValor || '(em branco)'
+    });
+  }
+
+  // ===== espelhamento (best-effort) para o Google Sheets da planilha de premiação =====
+  // Envia uma cópia das linhas de histórico recém-geradas para o Apps Script já usado
+  // pelo app de premiação, numa aba própria (LIBERACAO_CAMADAS_HISTORICO). Isso nunca
+  // deve travar nem atrasar o app: se falhar (sem internet, URL não configurada, etc.),
+  // o erro é apenas ignorado — o histórico continua 100% funcional aqui no Netlify.
+  function mirrorHistoricoToSheets(entries){
+    if(!SHEETS_MIRROR_URL || !entries || !entries.length) return;
+    try{
+      fetch(SHEETS_MIRROR_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: JSON.stringify({
+          acao: 'LIBERACAO_HISTORICO',
+          origem: 'LIBERACAO_CAMADAS',
+          registros: JSON.stringify(entries)
+        })
+      }).catch(function(){ /* melhor esforço: falha de rede não deve afetar o app */ });
+    }catch(e){ /* melhor esforço */ }
+  }
+
   // ===== histórico de ensaios: consolidado a cada SNAPSHOT_INTERVAL_MS =====
   // Em vez de gravar uma linha no histórico a cada clique (o que lotaria o
   // registro com correções de cliques errados da Aline/João), guardamos o
@@ -321,6 +358,8 @@
   function commitHistorySnapshot(){
     if(!state || !isEditor) return;
     if(!state.histSnapshot || typeof state.histSnapshot !== 'object') state.histSnapshot = {};
+    if(!Array.isArray(state.historico)) state.historico = [];
+    var startLen = state.historico.length;
     state.faixas.forEach(function(f){
       pontosOf(f).forEach(function(p){
         var key = pontoHistKey(f.id, p.label);
@@ -336,7 +375,19 @@
         if(curD !== last.diefra) logHistorico(f, p.label, 'diefra', curD);
         state.histSnapshot[key] = {aterpa:curA, diefra:curD};
       });
+      // observação da faixa: mesma lógica de consolidação (não grava a cada tecla digitada)
+      var obsKey = 'obs::' + f.id;
+      var curObs = f.observacao || '';
+      var lastObs = state.histSnapshot[obsKey];
+      if(lastObs === undefined){
+        state.histSnapshot[obsKey] = curObs;
+      } else if(curObs !== lastObs){
+        logHistoricoObservacao(f, curObs);
+        state.histSnapshot[obsKey] = curObs;
+      }
     });
+    var novasEntradas = state.historico.slice(startLen);
+    if(novasEntradas.length) mirrorHistoricoToSheets(novasEntradas);
     scheduleSave();
   }
 
@@ -622,6 +673,7 @@
         if(novoOao !== !!f.compOmbreiraOmbreira){
           f.compOmbreiraOmbreira = novoOao;
           logHistoricoOao(f, novoOao);
+          mirrorHistoricoToSheets([state.historico[state.historico.length - 1]]);
           touch(f);
           var toggle = card.querySelector('[data-computed="oaoToggle"]');
           toggle.querySelector('.sim').classList.toggle('active', f.compOmbreiraOmbreira);
@@ -723,6 +775,7 @@
       arquivadoEm: new Date().toISOString()
     });
     logHistoricoLancamento(f, atual, atual + 1);
+    mirrorHistoricoToSheets([state.historico[state.historico.length - 1]]);
 
     var count = pontosOf(f).length || ensaiosFromVolume(f.volumeM3) || 5;
     f.lancamento = atual + 1;
@@ -752,6 +805,7 @@
 
     commitHistorySnapshot();
     logHistoricoLancamento(f, atual, arq.lancamento, true);
+    mirrorHistoricoToSheets([state.historico[state.historico.length - 1]]);
 
     f.lancamento = arq.lancamento;
     f.pontos = JSON.parse(JSON.stringify(arq.pontos));

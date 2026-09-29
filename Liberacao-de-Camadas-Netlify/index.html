@@ -435,6 +435,16 @@
   </div>
 </div>
 
+<script>
+  // Espelhamento opcional do histórico (aprovações/reprovações/contraprova/observações)
+  // para uma aba do Google Sheets (mesma planilha da premiação), usando o Apps Script
+  // que o app de premiação já usa. Para ativar: cole aqui a mesma URL "/exec" do Web
+  // App (ex.: a mesma usada em SUGESTOES_WEBAPP_URL no app de premiação), depois de
+  // adicionar as funções da aba "LIBERACAO_CAMADAS_HISTORICO" a esse Apps Script e
+  // publicar uma NOVA VERSÃO do deploy. Deixe em branco ('') para manter desativado —
+  // o app funciona normalmente sem isso, só não envia cópia para o Sheets.
+  window.LC_SHEETS_URL = window.LC_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbw10FF_fkadyCASRk6heJ71depXejwCF6-yaEPRPOxj9vmuGiDaG4FS6DwSFXjYWi89/exec';
+</script>
 <script src="vendor/xlsx.min.js"></script>
 <script src="app.js"></script>
 </body>
