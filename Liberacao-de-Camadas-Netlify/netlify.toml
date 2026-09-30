@@ -35,6 +35,12 @@
   force = true
 
 [[redirects]]
+  from = "/versoes-anteriores/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
   from = "/dist/*"
   to = "/404.html"
   status = 404

@@ -6,445 +6,267 @@
 <link rel="icon" href="data:,">
 <title>Liberação de Camadas — Maravilhas III</title>
 <style>
-  :root{
-    --verde-vale:#007E7A;
-    --amarelo-vale:#EDB111;
-    --cinza-escuro:#3A3A3A;
-    --cinza-input:#8A8D8F;
-    --cinza-claro:#EDEEEC;
-    --cinza-medio:#DADCDA;
-    --verde-aqua:#0ABB98;
-    --azul-vale:#3CB5E5;
-    --cereja-vale:#C0305E;
-    --laranja-vale:#E37222;
-    --bg:#EDEEEC;
-    --surface:#FFFFFF;
-    --surface-2:#F6F6F5;
-    --line:#DBDDDA;
-    --ink:#2E2E2E;
-    --ink-2:#666666;
-    --ink-3:#8F8F8F;
-    --shadow:0 10px 28px rgba(40,40,40,.10);
-    --radius:18px;
+:root{
+  --bg:#edf0f0; --surface:#fff; --ink:#252a2c; --muted:#6f7779; --line:#d8dddd;
+  --vale:#007e7a; --ok:#0ea968; --bad:#d42a55; --warn:#e08a00; --pend:#e4e5e3;
+  --compact:#4f8fb7; --compact-bg:#e8f2f8; --dark:#34393b; --shadow:0 8px 24px rgba(0,0,0,.08);
+  --block:#D42A55; --block-bg:#FBDEE5;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Segoe UI,Arial,sans-serif;color:var(--ink)}
+button,input,select,textarea{font:inherit}
+.app{max-width:1600px;margin:auto;padding:18px}
+.header{background:var(--surface);border-radius:18px;box-shadow:var(--shadow);padding:18px 22px;border-left:8px solid var(--vale)}
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.title{margin-right:auto}
+.title small{display:block;color:var(--vale);font-weight:800;letter-spacing:.08em}
+.title h1{margin:4px 0 0;font-size:25px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 13px;font-weight:700;cursor:pointer}
+.btn:hover{border-color:var(--vale);color:var(--vale)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--vale);border-color:var(--vale);color:#fff}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:6px 9px;font-size:11px}
+.btn.block{background:var(--block);border-color:var(--block);color:#fff}
 
-    --ok-solid:#0EA968; --ok-ink:#FFFFFF;
-    --bad-solid:#D42A55; --bad-ink:#FFFFFF;
-    --warn-solid:#E08A00; --warn-ink:#FFFFFF;
-    --pend-bg:#E4E5E3; --pend-ink:#6C6E6C;
+.summary-chip{font-size:12px;font-weight:700;color:var(--muted);background:#f1f3f3;border:1px solid var(--line);border-radius:999px;padding:8px 12px;white-space:nowrap}
+.sync-badge{font-size:11px;font-weight:700;color:var(--muted);background:#f1f3f3;border:1px solid var(--line);border-radius:999px;padding:7px 11px;white-space:nowrap}
+.sync-badge.is-ok{background:#DEF5EA;color:var(--ok);border-color:#9fdabd}
+.sync-badge.is-saving{background:#FCEBCF;color:var(--warn);border-color:#efc77e}
+.sync-badge.is-error{background:#FBDEE5;color:var(--bad);border-color:#e5a3b4}
+body:not(.is-editor) .editor-only{display:none!important}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.stat{background:#f5f7f7;border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:12px;font-weight:700}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:8px 0 14px}
+.dot{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-2px}
+.orientation{display:grid;grid-template-columns:110px 1fr 110px;align-items:center;margin:6px 0 9px;font-size:12px;font-weight:800;color:var(--muted)}
+.axis{text-align:center;border-top:2px solid #aeb6b6;padding-top:6px;position:relative}
+.axis:before{content:"◀";position:absolute;left:-3px;top:-10px}
+.axis:after{content:"▶";position:absolute;right:-3px;top:-10px}
 
-    --good-bg:#DEF5EA; --good-line:#0EA968;
-    --warn-bg:#FCEBCF; --warn-line:#E08A00;
-    --bad-bg:#FBDEE5;  --bad-line:#D42A55;
-    --muted-bg:#E4E5E3; --muted-line:#C7C9C6;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;}
-  body{
-    background:var(--bg); color:var(--ink);
-    font-family:'Segoe UI',Arial,sans-serif;
-    font-variant-numeric: tabular-nums;
-    padding-inline:18px; padding-block:0 48px;
-  }
-  h1,h2,h3{margin:0;}
-  button, select, input, textarea{font-family:inherit;}
-  a{color:inherit;}
-  .wrap{max-width:1480px; margin-inline:auto;}
+.backlog-panel{background:#fff;border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);margin:0 0 16px;padding:14px}
+.backlog-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.backlog-head h2{font-size:16px;margin:0;margin-right:auto}
+.backlog-list{display:grid;gap:7px;margin-top:10px}
+.backlog-item{display:grid;grid-template-columns:90px 90px 1fr 120px;gap:8px;align-items:center;background:var(--block-bg);border:1px solid #E6A8B7;border-left:5px solid var(--bad);border-radius:9px;padding:8px 10px;font-size:11px}
+.backlog-item b{font-size:12px}
+.backlog-empty{font-size:12px;color:var(--muted);padding-top:8px}
 
-  /* ---------- header (maior, com logo da Aterpa) ---------- */
-  .topbar{
-    position:sticky; top:0; z-index:30; background:var(--bg);
-    padding-block:20px 12px; display:flex; flex-wrap:wrap; align-items:center; gap:12px 16px;
-  }
-  .header-card{
-    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:26px 30px; display:flex; align-items:center;
-    gap:16px 22px; flex-wrap:wrap; width:100%; border-left:9px solid var(--verde-vale);
-  }
-  .brand-text{margin-right:auto;}
-  .brand-row{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
-  .brand-logo-chip{
-    background:var(--cinza-escuro); border-radius:8px; padding:6px 12px;
-    display:inline-flex; align-items:center; line-height:0;
-  }
-  .brand-logo-img{height:22px; width:auto; display:block;}
-  .brand-x{color:var(--ink-3); font-weight:800; font-size:14px;}
-  .brand-diefra{color:var(--verde-vale); font-weight:800; letter-spacing:.12em; font-size:12.5px;}
-  .brand-text h1{font-size:29px; font-weight:800; letter-spacing:-.02em; color:var(--ink);}
-  .summary-chip{
-    font-size:12.5px; font-weight:700; color:var(--ink-2);
-    background:var(--cinza-claro); border:1px solid var(--line); border-radius:999px;
-    padding:8px 15px; display:flex; align-items:center; gap:7px; white-space:nowrap;
-  }
-  .summary-chip b{color:var(--ok-solid); font-weight:800;}
-  .sync-badge{
-    font-size:11.5px; font-weight:700; color:var(--ink-2); background:var(--cinza-claro);
-    border:1px solid var(--line); border-radius:999px; padding:7px 14px; white-space:nowrap;
-  }
-  .sync-badge.is-saving{background:var(--warn-bg); color:var(--warn-solid); border-color:var(--warn-line);}
-  .sync-badge.is-error{background:var(--bad-bg); color:var(--bad-solid); border-color:var(--bad-line);}
-  .sync-badge.is-ok{background:var(--good-bg); color:var(--ok-solid); border-color:var(--good-line);}
-  .btn{
-    font-size:13px; font-weight:700; border-radius:11px; padding:11px 17px; cursor:pointer;
-    border:1px solid transparent; display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
-  }
-  .btn-primary{background:var(--verde-vale); color:#fff;}
-  .btn-primary:hover{background:#00655F;}
-  .btn:disabled{opacity:.6; cursor:wait;}
-  .btn-ghost{background:#fff; border-color:var(--line); color:var(--ink);}
-  .btn-ghost:hover{border-color:var(--verde-vale); color:var(--verde-vale);}
-  .btn:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, button:focus-visible{
-    outline:2px solid var(--azul-vale); outline-offset:1px;
-  }
+.faixa-card{background:var(--surface);border-radius:16px;box-shadow:var(--shadow);padding:12px;margin-bottom:14px;border-left:7px solid #c7cbcb}
+.faixa-card.liberado{border-left-color:var(--ok)}
+.faixa-card.reprovado{border-left-color:var(--bad)}
+.faixa-card.contraprova{border-left-color:var(--warn)}
+.faixa-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 2px 10px}
+.faixa-title{font-size:18px;font-weight:900}
+.faixa-num{width:60px;font-weight:900;font-size:18px;border:1px solid var(--line);border-radius:8px;padding:5px 7px}
+.meta{display:flex;align-items:center;gap:5px;background:#f6f7f7;border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:11px;min-height:39px}
+.meta input,.meta select{border:1px solid var(--line);border-radius:6px;padding:4px 5px;background:#fff}
+.meta input{width:68px}
+.layer-select{min-width:190px}
+.head-status{font-size:11px;font-weight:900;text-transform:uppercase;padding:6px 10px;border-radius:999px;background:#f1f2f2;color:#777}
+.head-status.liberado{background:#def5ea;color:var(--ok)}
+.head-status.reprovado{background:#fbdee5;color:var(--bad)}
+.head-status.contraprova{background:#fcebcf;color:var(--warn)}
+.layer-badge{font-size:11px;font-weight:900;border-radius:999px;padding:5px 8px;background:#fff;border:1px solid var(--line);margin-left:auto}
+.layer-badge.current{background:#dff4f2;border-color:#94cec9;color:#006861}
+.layer-badge.old{background:#f1f2f2;color:#666}
+.block-banner{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.block-chip{background:var(--block-bg);border:1px solid #E6A8B7;color:#A71E43;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:800}
 
-  .legend{
-    display:flex; flex-wrap:wrap; gap:12px 22px; padding-block:4px 14px; font-size:12px; color:var(--ink-2);
-  }
-  .legend span{display:inline-flex; align-items:center; gap:7px;}
-  .legend i{width:14px; height:14px; border-radius:5px; display:inline-block;}
+.quad-strip{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding-bottom:4px}
+.quad{min-width:182px;flex:1 0 182px;border:1px solid var(--line);border-radius:12px;background:#fafbfb;padding:9px;position:relative}
+.quad.compact-pendente{background:var(--compact-bg);border-color:#a8cadd}
+.quad.q-ok{background:#ecfaf4;border-color:#90dabd}
+.quad.q-bad{background:#fff0f4;border-color:#e5a3b4}
+.quad.q-warn{background:#fff6e8;border-color:#efc77e}
+.quad.blocked{background:var(--block-bg)!important;border:2px solid #D42A55!important}
+.block-overlay{font-size:9px;font-weight:900;text-transform:uppercase;color:#A71E43;background:#fff;border:1px solid #E6A8B7;border-radius:7px;padding:5px 6px;margin:6px 0}
+.qtop{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.qname{font-size:13px;font-weight:900}
+.qtype{font-size:9px;font-weight:800;text-transform:uppercase;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px 6px}
+.compact-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:9px 0 8px;padding:7px;border-radius:8px;background:#fff;border:1px solid var(--line)}
+.compact-row b{font-size:10px;text-transform:uppercase}
+.compact-toggle{border:none;border-radius:7px;padding:6px 8px;font-size:10px;font-weight:900;cursor:pointer}
+.compact-toggle.done{background:var(--ok);color:#fff}
+.compact-toggle.pending{background:var(--compact);color:#fff}
+.compact-toggle:disabled{opacity:.4;cursor:not-allowed}
+.adrow{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.adbtn{border:none;border-radius:8px;padding:9px 4px;font-weight:900;cursor:pointer;background:var(--pend);color:#666}
+.adbtn.aprovado{background:var(--ok);color:#fff}
+.adbtn.reprovado{background:var(--bad);color:#fff}
+.adbtn.contraprova{background:var(--warn);color:#fff}
+.adbtn:disabled{opacity:.38;cursor:not-allowed}
+/* Quem só acompanha vê as cores normais (sem o apagado de "desabilitado"). */
+body:not(.is-editor) .adbtn:disabled:not([data-lock]),
+body:not(.is-editor) .compact-toggle:disabled:not([data-lock]){opacity:1;cursor:default}
+.qstatus{text-align:center;margin-top:7px;font-size:9px;font-weight:900;text-transform:uppercase;color:var(--muted)}
+.qtools{display:flex;gap:4px;justify-content:center;margin-top:8px}
+.qtools button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 6px;font-size:10px;cursor:pointer}
+.add-quad{min-width:86px;display:flex;align-items:center;justify-content:center;border:2px dashed var(--line);border-radius:12px;background:#f9fafa;color:var(--muted);font-weight:900;cursor:pointer}
+.add-quad:hover{border-color:var(--vale);color:var(--vale)}
+.obs{margin-top:10px}
+.obs textarea{width:100%;min-height:48px;border:1px solid var(--line);border-radius:9px;padding:8px;resize:vertical}
+.note{font-size:11px;color:var(--muted);margin-top:5px}
 
-  /* ---------- table head (meta columns only; mapa é livre) ---------- */
-  .table-head{
-    background:var(--cinza-escuro); color:#fff; border-radius:14px; overflow:hidden;
-    display:flex; align-items:stretch;
-  }
-  .thead-meta{display:flex; flex:0 0 auto;}
-  .thead-meta > div{
-    padding:11px 8px; font-size:10px; font-weight:800; text-transform:uppercase;
-    letter-spacing:.06em; text-align:center; display:flex; align-items:center; justify-content:center;
-  }
-  .thead-meta > div:first-child{width:128px; justify-content:flex-start; padding-left:16px;}
-  .thead-meta > div:nth-child(2){width:108px;}
-  .thead-meta > div:nth-child(3){width:96px;}
-  .thead-meta > div:nth-child(4){width:180px;}
-  .thead-mapa{
-    flex:1; padding:11px 16px; font-size:10px; font-weight:800; text-transform:uppercase;
-    letter-spacing:.06em; display:flex; align-items:center; gap:6px; border-left:1px solid rgba(255,255,255,.18);
-  }
-  .thead-mapa b{color:#8CE0C4;}
+.modal{position:fixed;inset:0;background:rgba(20,25,26,.48);display:none;align-items:center;justify-content:center;padding:18px;z-index:30}
+.modal.show{display:flex}
+.modal-box{width:min(520px,100%);background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:20px}
+.modal-box h3{margin:0 0 10px}
+.modal-box p{font-size:13px;color:var(--muted);line-height:1.5}
+.checks{display:grid;gap:8px;margin:12px 0}
+.checks label{display:flex;align-items:center;gap:8px;background:#f7f8f8;border:1px solid var(--line);border-radius:9px;padding:9px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.new-layer-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.new-layer-grid label{font-size:11px;font-weight:800;color:var(--muted)}
+.new-layer-grid input{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:4px}
 
-  .table-scroll{overflow-x:auto;}
-  .table{min-width:1040px; display:flex; flex-direction:column; gap:14px; padding-top:14px;}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);background:var(--dark);color:#fff;font-size:13px;font-weight:700;padding:11px 18px;border-radius:11px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:40;max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-  .faixa-card{
-    background:var(--surface); border-radius:14px; box-shadow:var(--shadow);
-    border-left:8px solid var(--muted-line); overflow:hidden;
-  }
-  .faixa-card.status-liberado{border-left-color:var(--ok-solid);}
-  .faixa-card.status-reprovado{border-left-color:var(--bad-solid);}
-  .faixa-card.status-contraprova{border-left-color:var(--warn-solid);}
-  .faixa-card.status-aguardando{border-left-color:var(--muted-line);}
-
-  .faixa-row{display:flex; align-items:stretch;}
-  .meta-block{display:flex; flex:0 0 auto;}
-  .meta-block > div{padding:12px 8px; display:flex; align-items:center; justify-content:center;}
-  .cell-faixa{width:128px; padding-left:16px !important; justify-content:flex-start !important; gap:3px; flex-direction:column; align-items:flex-start !important; overflow:visible;}
-  .cell-volume{width:108px;}
-  .cell-ensaios{width:96px;}
-  .cell-oao{width:180px; flex-direction:column; align-items:stretch !important; gap:3px;}
-
-  .faixa-num-input{
-    width:48px; font-size:19px; font-weight:800; color:var(--ink); background:none; border:none;
-    border-bottom:1.5px dashed var(--line); padding:0 2px 1px;
-  }
-  .faixa-num-input:focus{border-bottom-color:var(--verde-vale); outline:none;}
-  .faixa-num-input:read-only{border-bottom-color:transparent; cursor:default;}
-  .status-pill{
-    font-size:9px; font-weight:800; letter-spacing:.02em; text-transform:uppercase;
-    padding:3px 7px; border-radius:999px; white-space:nowrap; border:1px solid transparent; display:inline-block;
-  }
-  .status-pill.status-liberado{background:var(--good-bg); color:var(--ok-solid); border-color:var(--good-line);}
-  .status-pill.status-contraprova{background:var(--warn-bg); color:var(--warn-solid); border-color:var(--warn-line);}
-  .status-pill.status-reprovado{background:var(--bad-bg); color:var(--bad-solid); border-color:var(--bad-line);}
-  .status-pill.status-aguardando{background:var(--muted-bg); color:var(--pend-ink); border-color:var(--muted-line);}
-  .lancamento-badge{font-size:9px; font-weight:700; color:var(--ink-3); white-space:nowrap;}
-  .camada-lanc-row{display:flex; align-items:center; gap:7px; flex-wrap:wrap;}
-  .camada-wrap{font-size:9px; font-weight:700; color:var(--ink-3); display:inline-flex; align-items:center; gap:4px; white-space:nowrap;}
-  .camada-input{
-    width:38px; font-size:11px; font-weight:800; color:var(--ink); background:var(--surface-2);
-    border:1px solid var(--line); border-radius:6px; padding:2px 4px; text-align:center;
-  }
-  .camada-input:read-only{background:transparent; border-color:transparent; cursor:default; padding:2px 0;}
-
-  .cell-input{
-    width:76px; font-size:14px; font-weight:700; color:var(--ink); background:var(--surface-2);
-    border:1px solid var(--line); border-radius:8px; padding:7px 6px; text-align:center;
-  }
-  .cell-input:read-only{background:transparent; border-color:transparent; cursor:default;}
-  .computed-box{font-size:15px; font-weight:800; color:var(--ink);}
-
-  /* Compactação de ombreira a ombreira: escolha manual SIM/NÃO */
-  .oao-toggle{display:flex; border:1px solid var(--line); border-radius:9px; overflow:hidden;}
-  .oao-btn{
-    flex:1; font-size:11px; font-weight:800; letter-spacing:.03em; padding:7px 10px; border:none; cursor:pointer;
-    background:var(--surface-2); color:var(--ink-3);
-  }
-  .oao-btn.active.sim{background:var(--ok-solid); color:#fff;}
-  .oao-btn.active.nao{background:var(--cinza-input); color:#fff;}
-  .oao-btn:disabled{cursor:default;}
-
-  /* ---------- mapa de ensaios: lista flexível de pontos ---------- */
-  .mapa-block{
-    flex:1; display:flex; flex-wrap:wrap; align-content:center; gap:8px; padding:12px 16px;
-    border-left:1px dashed var(--line);
-  }
-  .ponto-chip{
-    display:flex; align-items:center; gap:5px; background:var(--surface-2); border:1px solid var(--line);
-    border-radius:10px; padding:5px 6px 5px 8px;
-  }
-  .ponto-label{
-    width:52px; font-size:11px; font-weight:700; text-align:center; color:var(--ink);
-    background:transparent; border:none; border-bottom:1px dashed var(--line); padding:2px 0;
-  }
-  .ponto-label:focus{border-bottom-color:var(--verde-vale); outline:none;}
-  .ponto-label:read-only{border-bottom-color:transparent; cursor:default;}
-  /* seletor real (não é clique-para-alternar): a "badge" mostra a letra e a cor do
-     status; por cima existe um <select> nativo transparente que cobre a mesma área —
-     escolher no menu muda o status direto, então o histórico só grava a escolha final. */
-  .letter-wrap{position:relative; width:27px; height:27px; display:inline-block;}
-  .letter-badge{
-    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    border-radius:8px; font-size:12.5px; font-weight:800; pointer-events:none;
-  }
-  .letter-badge.st-pendente{background:var(--pend-bg); color:var(--pend-ink);}
-  .letter-badge.st-aprovado{background:var(--ok-solid); color:#fff;}
-  .letter-badge.st-reprovado{background:var(--bad-solid); color:#fff;}
-  .letter-badge.st-contraprova{background:var(--warn-solid); color:#fff;}
-  .letter-select{
-    position:absolute; inset:0; width:100%; height:100%; opacity:0; border:none; margin:0; padding:0;
-    cursor:pointer; appearance:none; -webkit-appearance:none;
-  }
-  .letter-select:disabled{cursor:default;}
-  .chip-remove{background:none; border:none; color:var(--ink-3); cursor:pointer; font-size:14px; padding:0 2px;}
-  .chip-remove:hover{color:var(--bad-solid);}
-  .add-ponto-chip{
-    display:flex; align-items:center; gap:5px; background:none; border:1.5px dashed var(--line); border-radius:10px;
-    padding:7px 12px; color:var(--ink-2); font-weight:700; font-size:12px; cursor:pointer;
-  }
-  .add-ponto-chip:hover{border-color:var(--verde-vale); color:var(--verde-vale);}
-
-  /* coluna de ações à direita de cada faixa: novo lançamento, mover, remover —
-     tudo isso só aparece pra quem está logado (editor-only) */
-  .row-actions{
-    flex:0 0 auto; width:34px; display:flex; flex-direction:column; align-items:stretch;
-    border-left:1px dashed var(--line);
-  }
-  .row-actions button{
-    flex:1; background:none; border:none; color:var(--ink-3); cursor:pointer; font-size:12px;
-    display:flex; align-items:center; justify-content:center; padding:2px 0;
-  }
-  .row-actions button:hover{color:var(--verde-vale);}
-  .row-actions button.novo-lancamento-btn{color:var(--azul-vale); font-size:14px;}
-  .row-actions button.novo-lancamento-btn:hover{color:#1f8fc7;}
-  .row-actions button.voltar-lancamento-btn{color:var(--laranja-vale); font-size:13px;}
-  .row-actions button.voltar-lancamento-btn:hover{color:#b85614;}
-  .row-actions button.remove-faixa-btn{font-size:16px;}
-  .row-actions button.remove-faixa-btn:hover{color:var(--cereja-vale);}
-  .row-actions button:disabled{opacity:.25; cursor:default;}
-  .row-actions button:disabled:hover{color:var(--ink-3);}
-
-  /* ---------- lançamentos anteriores (histórico arquivado, visível a todos) ---------- */
-  .lanc-history{border-top:1px dashed var(--line); background:var(--surface-2); padding:2px 16px;}
-  .lanc-history summary{
-    cursor:pointer; padding:8px 0; font-size:11px; font-weight:700; color:var(--ink-2); list-style:none;
-  }
-  .lanc-history summary::-webkit-details-marker{display:none;}
-  .lanc-history summary::before{content:'▸ '; color:var(--ink-3);}
-  .lanc-history[open] summary::before{content:'▾ ';}
-  .lanc-hist-item{padding:8px 0 10px; border-top:1px dashed var(--line);}
-  .lanc-hist-item:first-of-type{border-top:none;}
-  .lanc-hist-head{font-size:11.5px; font-weight:700; color:var(--ink-2);}
-  .lanc-hist-meta{font-size:10.5px; font-weight:400; color:var(--ink-3); margin-left:6px;}
-  .lanc-hist-map{display:flex; flex-wrap:wrap; gap:6px; padding-top:6px;}
-  .hist-chip{display:inline-flex; align-items:center; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:4px 7px; font-size:11px;}
-  .hist-chip b{font-weight:700;}
-  .hist-l{display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:5px; font-size:9.5px; font-weight:800;}
-  .hist-l.st-pendente{background:var(--pend-bg); color:var(--pend-ink);}
-  .hist-l.st-aprovado{background:var(--ok-solid); color:#fff;}
-  .hist-l.st-reprovado{background:var(--bad-solid); color:#fff;}
-  .hist-l.st-contraprova{background:var(--warn-solid); color:#fff;}
-
-  .obs-row{padding:8px 16px 12px; border-top:1px dashed var(--line); background:var(--surface-2);}
-  .obs-row textarea{
-    width:100%; font-size:12.5px; color:var(--ink); background:var(--surface); border:1px solid var(--line);
-    border-radius:9px; padding:7px 9px; resize:vertical; min-height:32px;
-  }
-  .obs-row textarea:read-only{background:var(--surface-2); cursor:default;}
-  .obs-row-label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-3); margin-bottom:4px;}
-  .row-footer{
-    display:flex; align-items:center; justify-content:space-between; padding:2px 16px 10px;
-    font-size:10.5px; color:var(--ink-3); background:var(--surface-2);
-  }
-
-  .add-row{
-    display:flex; align-items:center; justify-content:center; gap:8px; padding:14px;
-    background:var(--surface); border:2px dashed var(--line); border-radius:14px; width:100%;
-    color:var(--ink-2); font-weight:700; font-size:13px; cursor:pointer;
-  }
-  .add-row:hover{border-color:var(--verde-vale); color:var(--verde-vale);}
-
-  .empty-state{text-align:center; padding:60px 20px; color:var(--ink-2); font-size:14px;}
-
-  /* elementos de edição — escondidos por completo pra quem não fez login */
-  body:not(.is-editor) .editor-only{display:none !important;}
-
-  /* ---------- login (sala de controle) ---------- */
-  .lock-overlay{
-    position:fixed; inset:0; background:rgba(46,46,46,.55); z-index:500;
-    display:flex; align-items:center; justify-content:center; padding:20px;
-  }
-  .lock-box{
-    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:30px 34px; max-width:360px; width:100%;
-  }
-  .lock-box h2{font-size:19px; margin:6px 0 10px; color:var(--ink);}
-  .lock-box p{font-size:13px; color:var(--ink-2); margin:0 0 16px; line-height:1.5;}
-  .lock-input{
-    width:100%; font-size:14px; padding:10px 12px; border:1px solid var(--line);
-    border-radius:9px; margin-bottom:10px;
-  }
-  .lock-error{font-size:12.5px; color:var(--bad-solid); font-weight:700; margin-bottom:10px; display:none;}
-  .lock-error.show{display:block;}
-  .lock-box .btn{width:100%; justify-content:center;}
-  .lock-label{font-size:11.5px; font-weight:700; color:var(--ink-2); display:block; margin:0 0 5px;}
-  .toast{
-    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-    background:var(--ink); color:#fff; font-size:13px; font-weight:600;
-    padding:10px 18px; border-radius:999px; box-shadow:var(--shadow); z-index:200;
-    opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
-  }
-  .toast.show{opacity:1; transform:translateX(-50%) translateY(-6px);}
-  @media (prefers-reduced-motion: reduce){ .toast{transition:none;} }
-
-  .print-header{display:none;}
-
-  /* ---------- tabela compacta só para impressão (1 folha A4 retrato) ---------- */
-  .print-only{display:none;}
-  .print-table{width:100%; border-collapse:collapse; font-size:10px;}
-  .print-table th, .print-table td{border:1px solid #bbb; padding:14px 7px; text-align:left; vertical-align:middle;}
-  .print-table th{background:#333; color:#fff; font-size:9px; text-transform:uppercase; letter-spacing:.03em; padding:9px 7px;}
-  .print-table td.pt-num{font-weight:800; font-size:14px;}
-  .print-table tr.pt-status-liberado td.pt-num{color:#0EA968;}
-  .print-table tr.pt-status-reprovado td.pt-num{color:#D42A55;}
-  .print-table tr.pt-status-contraprova td.pt-num{color:#E08A00;}
-  .pt-pill{font-size:9px; font-weight:800; text-transform:uppercase; padding:3px 7px; border-radius:8px; display:inline-block;}
-  .pt-pill.status-liberado{background:#DEF5EA; color:#0EA968;}
-  .pt-pill.status-reprovado{background:#FBDEE5; color:#D42A55;}
-  .pt-pill.status-contraprova{background:#FCEBCF; color:#E08A00;}
-  .pt-pill.status-aguardando, .pt-pill.status-semdados{background:#E4E5E3; color:#6C6E6C;}
-  .pp-chip{display:inline-block; margin:3px 5px 3px 0; white-space:nowrap;}
-  .pp-chip b{font-weight:700; margin-right:2px;}
-  .pp-l{display:inline-block; width:17px; height:17px; line-height:17px; text-align:center; border-radius:3px; font-size:9px; font-weight:800; margin-right:1px;}
-  .pp-l.st-pendente{background:#E4E5E3; color:#6C6E6C;}
-  .pp-l.st-aprovado{background:#0EA968; color:#fff;}
-  .pp-l.st-reprovado{background:#D42A55; color:#fff;}
-  .pp-l.st-contraprova{background:#E08A00; color:#fff;}
-
-  @media print{
-    @page{ size:A4 portrait; margin:9mm; }
-    body{background:#fff; padding:0; font-size:9px;}
-    .topbar{position:static; padding-block:0 4px;}
-    .header-card{box-shadow:none; border:1px solid #ccc; padding:8px 12px;}
-    .brand-text h1{font-size:15px;}
-    .brand-row{margin-bottom:2px;}
-    .brand-logo-img{height:14px;}
-    #printBtn, #saveSheetsBtn, #excelBtn, #loginBtn, .summary-chip, .sync-badge{display:none !important;}
-    #printRangeOverlay{display:none !important;}
-    .print-header{
-      display:block; font-size:9px; color:#444; text-align:right; padding:2px 2px 6px;
-    }
-    .legend{font-size:8px; gap:8px 14px; padding-block:2px 6px;}
-    .legend i{width:9px; height:9px;}
-    /* a visão interativa (cards) não imprime — só a tabela compacta abaixo */
-    .table-scroll{display:none !important;}
-    .lanc-history{display:none !important;}
-    .print-only{display:block;}
-    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
-  }
+.foot{font-size:11px;color:var(--muted);margin-top:14px}
+@media(max-width:1100px){
+  .layer-badge{margin-left:0}
+}
+@media(max-width:900px){
+  .backlog-item{grid-template-columns:1fr 1fr}.backlog-item span:nth-child(3){grid-column:1/-1}
+}
+@media(max-width:600px){
+  .app{padding:16px}
+  .header{padding:14px 16px}
+  .title h1{font-size:20px}
+  .orientation{grid-template-columns:40px 1fr 40px}
+}
+@media print{
+ @page{size:A4 landscape;margin:7mm}
+ body{background:#fff;font-size:9px}
+ .app{max-width:none;padding:0}
+ .toolbar,.btn,.qtools,.add-quad,.backlog-panel,.legend,.note,.toast{display:none!important}
+ .header{box-shadow:none;border:1px solid #bbb;padding:8px 10px;margin-bottom:6px}
+ .title h1{font-size:16px}
+ .sync-badge,.summary-chip{display:none!important}
+ .faixa-card{box-shadow:none;border:1px solid #bbb;border-left-width:5px;padding:8px;margin-bottom:7px;break-inside:avoid}
+ .faixa-head{padding-bottom:5px}
+ .block-banner{margin-bottom:5px}
+ .quad-strip{overflow:visible;display:flex;flex-wrap:wrap;gap:4px}
+ .quad{min-width:0;flex:1 1 125px;max-width:180px;padding:5px;break-inside:avoid}
+ .compact-row{margin:5px 0;padding:5px}
+ .adbtn{padding:6px 3px;opacity:1!important}
+ .compact-toggle{opacity:1!important}
+ .obs{display:block!important;margin-top:6px}
+ .obs textarea{display:block!important;min-height:34px;height:auto;border:1px solid #aaa;font-size:9px;overflow:visible;resize:none}
+ *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="topbar">
-    <div class="header-card">
-      <div class="brand-text">
-        <div class="brand-row">
-          <span class="brand-logo-chip"><img src="assets/aterpa-logo.png" alt="Aterpa" class="brand-logo-img"></span>
-          <span class="brand-x">×</span>
-          <span class="brand-diefra">DIEFRA</span>
-        </div>
-        <h1>Liberação de Camadas</h1>
+<div class="app">
+  <div class="header">
+    <div class="top">
+      <div class="title">
+        <small>ATERPA × DIEFRA • MARAVILHAS III</small>
+        <h1>Liberação de Camadas — Histórico, Pendências e Bloqueios</h1>
       </div>
-      <div class="sync-badge" id="syncBadge">carregando&hellip;</div>
-      <div class="summary-chip" id="summaryChip">carregando&hellip;</div>
-      <button class="btn btn-ghost" id="printBtn" type="button">🖨️ Imprimir / PDF</button>
-      <button class="btn btn-primary editor-only" id="saveSheetsBtn" type="button" title="Fechamento do dia: envia ensaios e observações para a planilha online">💾 Salvar</button>
-    <button class="btn btn-ghost editor-only" id="excelBtn" type="button">📊 Baixar Excel</button>
-      <button class="btn btn-ghost" id="loginBtn" type="button">🔒 Login</button>
+      <div class="sync-badge" id="syncBadge">carregando…</div>
+      <div class="summary-chip" id="summaryChip">resumo do dia</div>
+      <button class="btn" id="printBtn" type="button">🖨️ Imprimir / PDF</button>
+      <button class="btn primary editor-only" id="saveSheetsBtn" type="button" title="Fechamento do dia: envia ensaios e observações para a planilha online">💾 Salvar</button>
+      <button class="btn editor-only" id="excelBtn" type="button">📊 Baixar Excel</button>
+      <button class="btn" id="loginBtn" type="button">🔒 Login</button>
     </div>
+    <div class="stats" id="stats"></div>
   </div>
 
-  <div class="print-header" id="printHeader"></div>
+  <div class="toolbar">
+    <button class="btn primary editor-only" id="addFaixaBtn" type="button">+ Adicionar faixa</button>
+    <button class="btn block" id="scrollPendBtn" type="button">Ver pendências antigas</button>
+  </div>
 
   <div class="legend">
-    <span><i style="background:var(--ok-solid)"></i>A / D verde = Aterpa / Diefra aprovado</span>
-    <span><i style="background:var(--warn-solid)"></i>Amarelo = contraprova pendente</span>
-    <span><i style="background:var(--bad-solid)"></i>Vermelho = reprovado, precisa refazer</span>
-    <span><i style="background:var(--pend-bg); border:1px solid var(--muted-line)"></i>Cinza = ensaio ainda não realizado</span>
+    <span><i class="dot" style="background:var(--compact)"></i>Compactação pendente</span>
+    <span><i class="dot" style="background:var(--pend);border:1px solid #bbb"></i>Compactado / ensaio pendente</span>
+    <span><i class="dot" style="background:var(--ok)"></i>Aprovado</span>
+    <span><i class="dot" style="background:var(--warn)"></i>Contraprova</span>
+    <span><i class="dot" style="background:var(--bad)"></i>Reprovado</span>
+    <span><i class="dot" style="background:var(--block)"></i>Pendência herdada de camada anterior</span>
   </div>
 
-  <div class="table-scroll">
-    <div class="table-head">
-      <div class="thead-meta">
-        <div>Faixa</div><div>Volume (m³)</div><div>Ensaios</div><div>Compactação de Ombreira a Ombreira</div>
-      </div>
-      <div class="thead-mapa">Mapa de ensaios &mdash; clique em <b>A</b> (Aterpa) ou <b>D</b> (Diefra) para marcar o resultado de cada ponto</div>
+  <div class="backlog-panel" id="backlogPanel">
+    <div class="backlog-head">
+      <h2>Pendências de camadas anteriores — OE / Núcleo / OD</h2>
+      <select id="pendFilter" class="btn">
+        <option value="TODAS">Todas</option>
+        <option value="OE">Somente OE</option>
+        <option value="NUCLEO">Somente Núcleo</option>
+        <option value="OD">Somente OD</option>
+      </select>
     </div>
-    <div class="table" id="tableRoot">
-      <div class="empty-state">Carregando faixas&hellip;</div>
-    </div>
+    <div id="backlogList" class="backlog-list"></div>
   </div>
 
-  <div class="print-only" id="printTable"></div>
+  <div class="orientation">
+    <div>OE</div><div class="axis">SENTIDO LONGITUDINAL DA BARRAGEM</div><div style="text-align:right">OD</div>
+  </div>
 
+  <div id="root"></div>
+  <div class="foot">Cada faixa possui histórico próprio de camadas. As alterações da sala de controle aparecem ao vivo para quem acompanha; o botão Salvar faz o fechamento do dia na planilha online.</div>
+</div>
+
+<div class="modal" id="loginOverlay">
+  <div class="modal-box" style="max-width:360px">
+    <h3>Login da sala de controle</h3>
+    <p>Digite sua senha para liberar a edição.</p>
+    <input type="password" id="loginPassInput" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:10px" placeholder="Senha" autocomplete="current-password">
+    <div id="loginError" style="display:none;color:var(--bad);font-size:12px;font-weight:700;margin-bottom:8px"></div>
+    <div class="modal-actions">
+      <button class="btn" id="loginCancelBtn" type="button">Cancelar</button>
+      <button class="btn primary" id="loginSubmitBtn" type="button">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="oaoModal">
+  <div class="modal-box">
+    <h3>OAO = NÃO</h3>
+    <p>Selecione quais regiões já foram compactadas nesta camada. As demais ficarão pendentes.</p>
+    <div class="checks">
+      <label><input type="checkbox" id="chkOE"> Ombreira esquerda compactada</label>
+      <label><input type="checkbox" id="chkNucleo" checked> Núcleo compactado</label>
+      <label><input type="checkbox" id="chkOD"> Ombreira direita compactada</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="oaoCancelBtn" type="button">Cancelar</button>
+      <button class="btn primary" id="oaoApplyBtn" type="button">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="newLayerModal">
+  <div class="modal-box">
+    <h3>Nova camada</h3>
+    <p>A camada atual continuará salva no histórico. Se houver OE ou OD pendente, a nova camada exibirá um bloqueio herdado nessas regiões.</p>
+    <div class="new-layer-grid">
+      <label>Número da nova camada
+        <input type="number" id="newLayerNum">
+      </label>
+      <label>Volume (m³)
+        <input type="number" id="newLayerVol" value="0">
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="newLayerCancelBtn" type="button">Cancelar</button>
+      <button class="btn primary" id="newLayerConfirmBtn" type="button">Criar nova camada</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<div class="lock-overlay" id="loginOverlay" style="display:none;">
-  <div class="lock-box">
-    <div class="brand-row">
-      <span class="brand-logo-chip"><img src="assets/aterpa-logo.png" alt="Aterpa" class="brand-logo-img"></span>
-    </div>
-    <h2>Login da sala de controle</h2>
-    <input type="password" id="loginPassInput" class="lock-input" placeholder="Senha" autocomplete="current-password">
-    <div class="lock-error" id="loginError"></div>
-    <button class="btn btn-primary" id="loginSubmitBtn" type="button">Entrar</button>
-    <button class="btn btn-ghost" id="loginCancelBtn" type="button" style="margin-top:8px;">Cancelar</button>
-  </div>
-</div>
-
-<div class="lock-overlay" id="printRangeOverlay" style="display:none;">
-  <div class="lock-box">
-    <h2>Imprimir / PDF</h2>
-    <p>Deixe em branco para ver todos os lançamentos de cada faixa (o atual e os já arquivados, cada um com sua camada). Preencha as datas para restringir o relatório a um período específico.</p>
-    <label class="lock-label" for="printStartInput">Data inicial</label>
-    <input type="date" id="printStartInput" class="lock-input">
-    <label class="lock-label" for="printEndInput">Data final</label>
-    <input type="date" id="printEndInput" class="lock-input">
-    <div class="lock-error" id="printRangeError"></div>
-    <button class="btn btn-primary" id="printRangeConfirmBtn" type="button">Gerar PDF</button>
-    <button class="btn btn-ghost" id="printRangeCancelBtn" type="button" style="margin-top:8px;">Cancelar</button>
-  </div>
-</div>
-
 <script>
   // Envio do histórico (aprovações/reprovações/contraprova/observações) pelo botão
-  // "Salvar" para uma aba do Google Sheets (mesma planilha da premiação), usando o Apps Script
-  // que o app de premiação já usa. Para ativar: cole aqui a mesma URL "/exec" do Web
-  // App (ex.: a mesma usada em SUGESTOES_WEBAPP_URL no app de premiação), depois de
-  // adicionar as funções da aba "LIBERACAO_CAMADAS_HISTORICO" a esse Apps Script e
-  // publicar uma NOVA VERSÃO do deploy. Deixe em branco ('') para manter desativado —
-  // o app funciona normalmente sem isso, só não envia cópia para o Sheets.
+  // "Salvar" para a aba "LIBERACAO_CAMADAS_HISTORICO" da planilha da premiação,
+  // pelo Web App do Apps Script (arquivos em apps-script/). Deixe em branco ('')
+  // para desativar — o app funciona normalmente sem isso.
   window.LC_SHEETS_URL = window.LC_SHEETS_URL || 'https://script.google.com/macros/s/AKfycbw10FF_fkadyCASRk6heJ71depXejwCF6-yaEPRPOxj9vmuGiDaG4FS6DwSFXjYWi89/exec';
 </script>
 <script src="vendor/xlsx.min.js"></script>

@@ -161,8 +161,8 @@ As senhas **não ficam escritas em nenhum arquivo** — ficam guardadas só dent
 ## Testar (vale para as duas opções)
 
 1. Abra o link do site (o `https://....netlify.app`, ou o domínio que você configurou).
-2. Sem fazer login: você deve ver as 7 faixas, os botões **Imprimir / PDF** e **Login**, mas **sem** o botão de Baixar Excel e sem os botões de editar (isso é o modo "acompanhamento", igual vai ser pra quem está na obra).
-3. Clique em **Login**, digite `00063727` → deve aparecer "Bem-vindo João!" e liberar a edição (Baixar Excel, mover faixas, ✕ remover, 🔁 Novo Lançamento, etc).
+2. Sem fazer login: você deve ver as faixas, o painel de pendências e os botões **Imprimir / PDF** e **Login**, mas **sem** Salvar, Baixar Excel e os botões de editar (isso é o modo "acompanhamento", igual vai ser pra quem está na obra). O seletor de **Histórico** de cada faixa funciona para todos, só para consultar camadas antigas.
+3. Clique em **Login**, digite `00063727` → deve aparecer "Bem-vindo João!" e liberar a edição (Salvar, Baixar Excel, ensaios A/D, compactação, OAO, + Nova camada, quadrantes, mover/excluir faixa etc).
 4. Clique em **Login** de novo (agora mostrando "Sair (João)") pra sair, e teste com `00056087` → deve aparecer "Bem-vinda Aline!".
 5. Abra o mesmo link em outro navegador (ou no celular) sem fazer login, faça uma alteração no primeiro (logado), e veja a tela do segundo atualizar sozinha em alguns segundos.
 
@@ -172,8 +172,8 @@ As senhas **não ficam escritas em nenhum arquivo** — ficam guardadas só dent
 
 Só aparece para quem está logado. Ao clicar, o app:
 
-1. Junta os resultados de ensaio que mudaram desde o último Salvar (Aprovado, Reprovado, Contraprova), a Compactação de Ombreira a Ombreira e os Novos/Voltar Lançamento.
-2. Junta as observações preenchidas de cada faixa.
+1. Junta os resultados de ensaio de cada quadrante que mudaram desde o último Salvar (Aprovado, Reprovado, Contraprova) — inclusive de camadas antigas do histórico —, as mudanças de OAO (com as regiões compactadas) e as novas camadas criadas.
+2. Junta as observações preenchidas de cada camada.
 3. Pede confirmação e envia tudo para a aba `LIBERACAO_CAMADAS_HISTORICO` da planilha online.
 4. Só depois que a planilha confirma o recebimento, apaga da tela as observações enviadas (elas ficam registradas na planilha).
 
