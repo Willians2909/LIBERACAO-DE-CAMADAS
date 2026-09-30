@@ -5,6 +5,17 @@ Este pacote já vem pronto para publicar. Ele tem duas partes:
 - **Página** (`index.html`, `app.js`, `assets/`, `vendor/`) — o que todo mundo vê no navegador.
 - **Servidor** (pasta `netlify/functions/`) — três rotinas pequenas que rodam no Netlify, guardam os dados de verdade (faixas, ensaios, histórico) e são as únicas que sabem as senhas. É isso que permite várias pessoas verem a mesma tela ao vivo, com só o João e a Aline conseguindo editar.
 
+Além disso, a pasta do projeto guarda:
+
+- **`apps-script/`**: cópia do código do Google Apps Script que grava o histórico na aba `LIBERACAO_CAMADAS_HISTORICO` da planilha. Não é publicado no Netlify; veja `apps-script/LEIA-ME.md`.
+- **`ferramentas/`**: scripts de PowerShell que geram os arquivos de entrega na pasta `dist/`:
+  - `gerar-zip-netlify.ps1` → `dist/Liberacao-de-Camadas-Netlify.zip` (pacote para publicar)
+  - `gerar-offline.ps1` → `dist/Liberacao-de-Camadas-OFFLINE.html` (arquivo único para testar no navegador sem servidor; senhas iguais às do site, dados só na memória e o botão Salvar manda para uma planilha simulada, nunca para a real)
+
+  Para rodar: `powershell -ExecutionPolicy Bypass -File ferramentas\gerar-zip-netlify.ps1` (ou `gerar-offline.ps1`), dentro da pasta do projeto.
+
+Esses arquivos extras não ficam acessíveis pelo site publicado: o `netlify.toml` responde "página não encontrada" para eles (e também para este `COMO-PUBLICAR.md`, que tem as senhas).
+
 Por causa dessa parte de servidor, **não dá pra simplesmente arrastar a pasta na tela inicial do Netlify** (aquele "drag and drop" simples só publica arquivos estáticos, sem rodar as três rotinas). Mas isso **não significa que precisa de GitHub** — dá pra publicar direto da sua conta Netlify, usando o "Netlify CLI" (um programinha de linha de comando). É a opção mais rápida se você já tem conta lá. Deixei o caminho pelo GitHub como alternativa lá embaixo, para quem preferir tudo pelo navegador.
 
 ---
@@ -154,6 +165,19 @@ As senhas **não ficam escritas em nenhum arquivo** — ficam guardadas só dent
 3. Clique em **Login**, digite `00063727` → deve aparecer "Bem-vindo João!" e liberar a edição (Baixar Excel, mover faixas, ✕ remover, 🔁 Novo Lançamento, etc).
 4. Clique em **Login** de novo (agora mostrando "Sair (João)") pra sair, e teste com `00056087` → deve aparecer "Bem-vinda Aline!".
 5. Abra o mesmo link em outro navegador (ou no celular) sem fazer login, faça uma alteração no primeiro (logado), e veja a tela do segundo atualizar sozinha em alguns segundos.
+
+---
+
+## Botão 💾 Salvar (fechamento do dia)
+
+Só aparece para quem está logado. Ao clicar, o app:
+
+1. Junta os resultados de ensaio que mudaram desde o último Salvar (Aprovado, Reprovado, Contraprova), a Compactação de Ombreira a Ombreira e os Novos/Voltar Lançamento.
+2. Junta as observações preenchidas de cada faixa.
+3. Pede confirmação e envia tudo para a aba `LIBERACAO_CAMADAS_HISTORICO` da planilha online.
+4. Só depois que a planilha confirma o recebimento, apaga da tela as observações enviadas (elas ficam registradas na planilha).
+
+Se a internet ou a planilha falhar, aparece um aviso e nada é apagado; é só clicar em Salvar de novo. Nada é enviado para a planilha sem clicar em Salvar. O que ainda não foi enviado fica guardado no site, mesmo se sair do login ou fechar o navegador.
 
 ---
 

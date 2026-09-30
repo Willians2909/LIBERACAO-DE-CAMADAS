@@ -12,3 +12,42 @@
   for = "/*"
   [headers.values]
     X-Frame-Options = "SAMEORIGIN"
+
+# Como a pasta inteira é publicada (publish = "."), estes arquivos ficariam
+# abertos pelo navegador. Eles não fazem parte do site (COMO-PUBLICAR.md tem
+# as senhas; apps-script/ tem e-mails da equipe), então respondem 404.
+[[redirects]]
+  from = "/COMO-PUBLICAR.md"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/apps-script/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ferramentas/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/dist/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/package.json"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/netlify.toml"
+  to = "/404.html"
+  status = 404
+  force = true

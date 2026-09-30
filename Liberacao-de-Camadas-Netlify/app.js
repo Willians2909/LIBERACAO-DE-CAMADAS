@@ -5,21 +5,20 @@
   var POLL_MS = 5000;
   var SAVE_DEBOUNCE_MS = 700;
   var SAVE_RETRY_MS = 4000;
-  // Intervalo de consolidação do histórico de ensaios (a cada 10 min, por padrão).
-  // Ajustável via window.LC_SNAPSHOT_MS só para testes automatizados.
-  var SNAPSHOT_INTERVAL_MS = window.LC_SNAPSHOT_MS || (10 * 60 * 1000);
-  // URL do Web App do Google Apps Script (mesma planilha da premiação) que recebe uma cópia
-  // do histórico (aprovações/reprovações/contraprova/observações). Opcional: deixe em branco
-  // (window.LC_SHEETS_URL = '') para desativar o espelhamento sem afetar o funcionamento normal.
+  // Tempo máximo esperando a planilha confirmar o recebimento no botão Salvar.
+  var SHEETS_TIMEOUT_MS = 30000;
+  // URL do Web App do Google Apps Script (mesma planilha da premiação) que recebe
+  // o histórico (aprovações/reprovações/contraprova/observações) quando o editor
+  // clica em "Salvar". Deixe em branco (window.LC_SHEETS_URL = '') para desativar.
   var SHEETS_MIRROR_URL = window.LC_SHEETS_URL || '';
 
-  var STATUS_LABEL = { liberado:'Liberado', contraprova:'Contraprova', reprovado:'Reprovado', aguardando:'Aguardando', semdados:'Sem pontos' };
+  var STATUS_LABEL = { liberado:'Liberado', contraprova:'Contraprova', reprovado:'Reprovado', aguardando:'Aguardando', semdados:'Sem pontos', aprovado:'Aprovado', pendente:'Pendente' };
   var LAB_LETTER = {aterpa:'A', diefra:'D'};
   var LAB_FULL = {pendente:'Pendente', aprovado:'Aprovado', reprovado:'Reprovado', contraprova:'Contraprova'};
   var LAB_NAME = {aterpa:'Aterpa', diefra:'Diefra'};
   var LAB_ORDER = ['pendente','aprovado','reprovado','contraprova'];
 
-  var DEFAULT_STATE = { meta:{ savedAt:null, updatedBy:null }, faixas:[], historico:[], lancamentosArquivados:[], histSnapshot:{} };
+  var DEFAULT_STATE = { meta:{ savedAt:null, updatedBy:null }, faixas:[], historico:[], lancamentosArquivados:[], histSnapshot:{}, planilhaFila:[] };
 
   var state = null;
   var isEditor = false;
@@ -27,7 +26,7 @@
   var editorPassword = null;
   var pollTimer = null;
   var saveTimer = null;
-  var snapshotTimer = null;
+  var enviandoPlanilha = false;
 
   /* ==================== API ==================== */
   function api(path, opts){
@@ -54,6 +53,7 @@
       if(!Array.isArray(parsed.historico)) parsed.historico = [];
       if(!Array.isArray(parsed.lancamentosArquivados)) parsed.lancamentosArquivados = [];
       if(!parsed.histSnapshot || typeof parsed.histSnapshot !== 'object') parsed.histSnapshot = {};
+      if(!Array.isArray(parsed.planilhaFila)) parsed.planilhaFila = [];
       if(!parsed.meta || typeof parsed.meta !== 'object') parsed.meta = {};
       return parsed;
     }
@@ -141,7 +141,6 @@
       hideLoginOverlay();
       stopPolling();
       applyRoleUI();
-      startSnapshotTimer();
       fetchState().then(function(){
         var saudacao = editorName === 'Aline' ? 'Bem-vinda' : 'Bem-vindo';
         showToast(saudacao + ' ' + editorName + '! Modo de edição ativado.');
@@ -155,13 +154,12 @@
 
   function logout(){
     if(isEditor){
-      // consolida qualquer mudança de ensaio pendente (dentro da janela de 10 min)
-      // antes de sair, para não perder registro por causa do fim da sessão.
+      // consolida as mudanças de ensaio ainda não registradas antes de sair; elas
+      // ficam na fila (state.planilhaFila) até o próximo clique em "Salvar".
       commitHistorySnapshot();
       clearTimeout(saveTimer);
       pushState();
     }
-    stopSnapshotTimer();
     isEditor = false;
     editorName = null;
     editorPassword = null;
@@ -368,33 +366,121 @@
     };
   }
 
-  // Envia uma cópia das linhas de histórico recém-geradas para o Apps Script já usado
-  // pelo app de premiação, numa aba própria (LIBERACAO_CAMADAS_HISTORICO). Isso nunca
-  // deve travar nem atrasar o app: se falhar (sem internet, URL não configurada, etc.),
-  // o erro é apenas ignorado — o histórico continua 100% funcional aqui no Netlify.
-  function mirrorHistoricoToSheets(entries){
-    if(!SHEETS_MIRROR_URL || !entries || !entries.length) return;
-    try{
-      fetch(SHEETS_MIRROR_URL, {
-        method: 'POST',
-        headers: {'Content-Type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({
-          acao: 'LIBERACAO_HISTORICO',
-          origem: 'LIBERACAO_CAMADAS',
-          registros: JSON.stringify(entries)
-        })
-      }).catch(function(){ /* melhor esforço: falha de rede não deve afetar o app */ });
-    }catch(e){ /* melhor esforço */ }
+  // Linhas para a planilha (aba LIBERACAO_CAMADAS_HISTORICO) ficam numa fila
+  // guardada junto com o estado no servidor, e só são enviadas quando o editor
+  // clica em "Salvar" (fechamento do dia). Assim nada se perde se a sessão
+  // cair ou a outra pessoa fizer login antes do envio.
+  function enfileirarPlanilha(rows){
+    if(!rows || !rows.length) return;
+    if(!Array.isArray(state.planilhaFila)) state.planilhaFila = [];
+    Array.prototype.push.apply(state.planilhaFila, rows);
   }
 
-  // ===== histórico de ensaios: consolidado a cada SNAPSHOT_INTERVAL_MS =====
+  function enviarParaPlanilha(rows){
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = controller ? setTimeout(function(){ controller.abort(); }, SHEETS_TIMEOUT_MS) : null;
+    return fetch(SHEETS_MIRROR_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        acao: 'LIBERACAO_HISTORICO',
+        origem: 'LIBERACAO_CAMADAS',
+        registros: JSON.stringify(rows)
+      }),
+      signal: controller ? controller.signal : undefined
+    }).then(function(res){
+      return res.text().then(function(text){
+        var data = null;
+        try{ data = JSON.parse(text); }catch(e){}
+        if(!res.ok || !data || data.ok !== true){
+          throw new Error((data && data.error) || ('resposta inesperada da planilha (HTTP ' + res.status + ')'));
+        }
+        return data;
+      });
+    }).finally(function(){ if(timer) clearTimeout(timer); });
+  }
+
+  // ===== botão "Salvar": fechamento do dia na planilha =====
+  // Consolida os ensaios, envia para a planilha a fila (aprovado / reprovado /
+  // contraprova / OAO / lançamentos) mais as observações preenchidas de cada
+  // faixa e, só depois que a planilha confirma o recebimento, apaga da tela as
+  // observações enviadas (elas ficam registradas na planilha).
+  function salvarNaPlanilha(){
+    if(!isEditor || !state || enviandoPlanilha) return;
+    if(!SHEETS_MIRROR_URL){ showToast('Envio para a planilha não está configurado.'); return; }
+
+    commitHistorySnapshot();
+
+    var fila = (state.planilhaFila || []).slice();
+    var obsEnviadas = [];
+    var obsRows = [];
+    state.faixas.forEach(function(f){
+      var texto = f.observacao || '';
+      if(!texto.trim()) return;
+      obsEnviadas.push({ id: f.id, texto: texto });
+      obsRows.push(sheetsRowEvento(f, 'Observação', texto.trim()));
+    });
+
+    if(!fila.length && !obsRows.length){ showToast('Nada novo para enviar à planilha.'); return; }
+
+    var msg = 'Salvar o dia na planilha online?\n\n' +
+      '• ' + fila.length + ' registro(s) de ensaio / evento\n' +
+      '• ' + obsRows.length + ' observação(ões) de faixa' +
+      (obsRows.length ? '\n\nAs observações enviadas serão apagadas da tela (continuam registradas na planilha).' : '');
+    if(!confirm(msg)) return;
+
+    setSalvandoPlanilha(true);
+    enviarParaPlanilha(fila.concat(obsRows)).then(function(){
+      // Tira da fila só o que foi enviado (algo pode ter entrado durante o envio).
+      state.planilhaFila.splice(0, fila.length);
+      obsEnviadas.forEach(function(o){
+        var f = findFaixa(o.id);
+        // Se alguém editou a observação durante o envio, mantém o texto novo.
+        if(!f || (f.observacao || '') !== o.texto) return;
+        f.observacao = '';
+        state.histSnapshot['obs::' + f.id] = '';
+        f.atualizadoEm = new Date().toISOString();
+      });
+      state.meta = state.meta || {};
+      state.meta.ultimoEnvioPlanilha = { em: new Date().toISOString(), por: editorName, registros: fila.length + obsRows.length };
+      scheduleSave();
+      render();
+      showToast('Salvo na planilha: ' + (fila.length + obsRows.length) + ' registro(s).');
+    }).catch(function(err){
+      console.error('falha ao enviar para a planilha', err);
+      alert('Não foi possível salvar na planilha agora (' + (err && err.name === 'AbortError' ? 'sem resposta da planilha' : (err && err.message) || 'erro de conexão') + ').\n\nNada foi apagado — tente Salvar de novo em instantes.');
+    }).finally(function(){
+      setSalvandoPlanilha(false);
+    });
+  }
+
+  function setSalvandoPlanilha(on){
+    enviandoPlanilha = on;
+    var btn = document.getElementById('saveSheetsBtn');
+    if(!btn) return;
+    btn.disabled = on;
+    btn.textContent = on ? '⏳ Salvando…' : '💾 Salvar';
+  }
+
+  // ===== histórico de ensaios: consolidado ao clicar em "Salvar" =====
   // Em vez de gravar uma linha no histórico a cada clique (o que lotaria o
   // registro com correções de cliques errados da Aline/João), guardamos o
-  // resultado "ao vivo" normalmente, e só a cada 10 minutos comparamos com a
-  // última fotografia salva (state.histSnapshot) e gravamos no histórico só o
-  // que realmente mudou desde então — incluindo reprovações, mesmo que depois
-  // sejam corrigidas (a reprovação já fica registrada na janela em que ocorreu).
+  // resultado "ao vivo" normalmente, e só no "Salvar" (ou antes de Novo/Voltar
+  // Lançamento, Baixar Excel e Sair) comparamos com a última fotografia
+  // (state.histSnapshot) e registramos só o que realmente mudou desde então.
   function pontoHistKey(faixaId, label){ return faixaId + '::' + (label || ''); }
+
+  // Depois de trocar o mapa inteiro da faixa (Novo/Voltar Lançamento), a base
+  // de comparação passa a ser o mapa novo — senão o lançamento novo, que
+  // reaproveita os nomes dos pontos, seria comparado com o anterior.
+  function rebaseSnapshotFaixa(f){
+    pontosOf(f).forEach(function(p){
+      state.histSnapshot[pontoHistKey(f.id, p.label)] = {
+        aterpa: LAB_ORDER.indexOf(p.aterpa) >= 0 ? p.aterpa : 'pendente',
+        diefra: LAB_ORDER.indexOf(p.diefra) >= 0 ? p.diefra : 'pendente'
+      };
+    });
+  }
 
   function commitHistorySnapshot(){
     if(!state || !isEditor) return;
@@ -406,21 +492,20 @@
         var key = pontoHistKey(f.id, p.label);
         var curA = LAB_ORDER.indexOf(p.aterpa) >= 0 ? p.aterpa : 'pendente';
         var curD = LAB_ORDER.indexOf(p.diefra) >= 0 ? p.diefra : 'pendente';
-        var last = state.histSnapshot[key];
-        if(!last){
-          // primeira vez que vemos este ponto: só grava a base, sem lançar registro
-          state.histSnapshot[key] = {aterpa:curA, diefra:curD};
-          return;
-        }
+        // Ponto que nunca foi consolidado (faixa nova, "+ ensaio") parte de
+        // pendente — assim um resultado marcado antes do primeiro Salvar também vai.
+        var last = state.histSnapshot[key] || {aterpa:'pendente', diefra:'pendente'};
         var mudou = (curA !== last.aterpa) || (curD !== last.diefra);
         if(curA !== last.aterpa) logHistorico(f, p.label, 'aterpa', curA);
         if(curD !== last.diefra) logHistorico(f, p.label, 'diefra', curD);
         // Uma linha só por ponto no Sheets (não uma por laboratório), já com o
         // estado combinado de Aterpa+Diefra — igual ao "Detalhe por ponto" do Excel.
-        if(mudou) sheetsRows.push(sheetsRowFromPonto(f, p));
+        // Ponto que voltou a ficar todo pendente (ex.: mapa zerado) não vai para a planilha.
+        if(mudou && !(curA === 'pendente' && curD === 'pendente')) sheetsRows.push(sheetsRowFromPonto(f, p));
         state.histSnapshot[key] = {aterpa:curA, diefra:curD};
       });
-      // observação da faixa: mesma lógica de consolidação (não grava a cada tecla digitada)
+      // observação da faixa: entra só no histórico interno (Excel). Para a
+      // planilha online ela é enviada pelo "Salvar", com o texto do momento.
       var obsKey = 'obs::' + f.id;
       var curObs = f.observacao || '';
       var lastObs = state.histSnapshot[obsKey];
@@ -428,20 +513,11 @@
         state.histSnapshot[obsKey] = curObs;
       } else if(curObs !== lastObs){
         logHistoricoObservacao(f, curObs);
-        sheetsRows.push(sheetsRowEvento(f, 'Observação', curObs || '(em branco)'));
         state.histSnapshot[obsKey] = curObs;
       }
     });
-    if(sheetsRows.length) mirrorHistoricoToSheets(sheetsRows);
+    enfileirarPlanilha(sheetsRows);
     scheduleSave();
-  }
-
-  function startSnapshotTimer(){
-    stopSnapshotTimer();
-    snapshotTimer = setInterval(commitHistorySnapshot, SNAPSHOT_INTERVAL_MS);
-  }
-  function stopSnapshotTimer(){
-    if(snapshotTimer){ clearInterval(snapshotTimer); snapshotTimer = null; }
   }
 
   function escapeHtml(s){
@@ -681,8 +757,8 @@
         p2[lab2] = novo;
         p2[lab2 + 'Em'] = novo === 'pendente' ? null : nowIso;
         // O resultado "ao vivo" muda na hora (todo mundo já vê isso na tela);
-        // o registro no histórico de ensaios (para o Excel) é consolidado a
-        // cada 10 min por commitHistorySnapshot(), pra não lotar o histórico
+        // o registro no histórico de ensaios (Excel e planilha) é consolidado
+        // no botão "Salvar" por commitHistorySnapshot(), pra não lotar o histórico
         // com cliques errados que são corrigidos na sequência.
         var wrap = e.target.closest('.letter-wrap');
         var badge = wrap.querySelector('.letter-badge');
@@ -718,7 +794,7 @@
         if(novoOao !== !!f.compOmbreiraOmbreira){
           f.compOmbreiraOmbreira = novoOao;
           logHistoricoOao(f, novoOao);
-          mirrorHistoricoToSheets([sheetsRowEvento(f, 'Compactação de Ombreira a Ombreira', novoOao ? 'SIM' : 'NÃO')]);
+          enfileirarPlanilha([sheetsRowEvento(f, 'Compactação de Ombreira a Ombreira', novoOao ? 'SIM' : 'NÃO')]);
           touch(f);
           var toggle = card.querySelector('[data-computed="oaoToggle"]');
           toggle.querySelector('.sim').classList.toggle('active', f.compOmbreiraOmbreira);
@@ -805,7 +881,7 @@
     if(!confirm(msg)) return;
 
     // consolida o histórico de ensaios deste lançamento antes de arquivar,
-    // pra não perder nenhuma mudança pendente na janela de 10 minutos.
+    // pra não perder nenhuma mudança feita desde o último "Salvar".
     commitHistorySnapshot();
 
     if(!Array.isArray(state.lancamentosArquivados)) state.lancamentosArquivados = [];
@@ -820,11 +896,12 @@
       arquivadoEm: new Date().toISOString()
     });
     logHistoricoLancamento(f, atual, atual + 1);
-    mirrorHistoricoToSheets([sheetsRowEvento(f, 'Novo Lançamento', 'Lançamento ' + atual + ' arquivado — iniciado Lançamento ' + (atual + 1))]);
+    enfileirarPlanilha([sheetsRowEvento(f, 'Novo Lançamento', 'Lançamento ' + atual + ' arquivado — iniciado Lançamento ' + (atual + 1))]);
 
     var count = pontosOf(f).length || ensaiosFromVolume(f.volumeM3) || 5;
     f.lancamento = atual + 1;
     f.pontos = defaultPontosForCount(count, f.numero);
+    rebaseSnapshotFaixa(f);
     f.compOmbreiraOmbreira = false;
     touch(f);
     render();
@@ -850,10 +927,11 @@
 
     commitHistorySnapshot();
     logHistoricoLancamento(f, atual, arq.lancamento, true);
-    mirrorHistoricoToSheets([sheetsRowEvento(f, 'Voltar Lançamento', 'Voltou do Lançamento ' + atual + ' para o Lançamento ' + arq.lancamento + ' (mapa anterior restaurado)')]);
+    enfileirarPlanilha([sheetsRowEvento(f, 'Voltar Lançamento', 'Voltou do Lançamento ' + atual + ' para o Lançamento ' + arq.lancamento + ' (mapa anterior restaurado)')]);
 
     f.lancamento = arq.lancamento;
     f.pontos = JSON.parse(JSON.stringify(arq.pontos));
+    rebaseSnapshotFaixa(f);
     f.compOmbreiraOmbreira = !!arq.compOmbreiraOmbreira;
     if(arq.volumeM3 !== undefined && arq.volumeM3 !== null) f.volumeM3 = arq.volumeM3;
     if(arq.camada !== undefined && arq.camada !== null) f.camada = arq.camada;
@@ -1117,8 +1195,8 @@
   function boot(){
     restoreSession();
     applyRoleUI();
-    if(isEditor) startSnapshotTimer();
 
+    document.getElementById('saveSheetsBtn').addEventListener('click', salvarNaPlanilha);
     document.getElementById('excelBtn').addEventListener('click', downloadExcel);
     document.getElementById('printBtn').addEventListener('click', showPrintRangeOverlay);
     document.getElementById('printRangeConfirmBtn').addEventListener('click', confirmPrintRange);

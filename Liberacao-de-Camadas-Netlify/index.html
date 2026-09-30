@@ -89,6 +89,7 @@
   }
   .btn-primary{background:var(--verde-vale); color:#fff;}
   .btn-primary:hover{background:#00655F;}
+  .btn:disabled{opacity:.6; cursor:wait;}
   .btn-ghost{background:#fff; border-color:var(--line); color:var(--ink);}
   .btn-ghost:hover{border-color:var(--verde-vale); color:var(--verde-vale);}
   .btn:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, button:focus-visible{
@@ -346,7 +347,7 @@
     .brand-text h1{font-size:15px;}
     .brand-row{margin-bottom:2px;}
     .brand-logo-img{height:14px;}
-    #printBtn, #excelBtn, #loginBtn, .summary-chip, .sync-badge{display:none !important;}
+    #printBtn, #saveSheetsBtn, #excelBtn, #loginBtn, .summary-chip, .sync-badge{display:none !important;}
     #printRangeOverlay{display:none !important;}
     .print-header{
       display:block; font-size:9px; color:#444; text-align:right; padding:2px 2px 6px;
@@ -376,7 +377,8 @@
       <div class="sync-badge" id="syncBadge">carregando&hellip;</div>
       <div class="summary-chip" id="summaryChip">carregando&hellip;</div>
       <button class="btn btn-ghost" id="printBtn" type="button">🖨️ Imprimir / PDF</button>
-      <button class="btn btn-ghost editor-only" id="excelBtn" type="button">📊 Baixar Excel</button>
+      <button class="btn btn-primary editor-only" id="saveSheetsBtn" type="button" title="Fechamento do dia: envia ensaios e observações para a planilha online">💾 Salvar</button>
+    <button class="btn btn-ghost editor-only" id="excelBtn" type="button">📊 Baixar Excel</button>
       <button class="btn btn-ghost" id="loginBtn" type="button">🔒 Login</button>
     </div>
   </div>
@@ -436,8 +438,8 @@
 </div>
 
 <script>
-  // Espelhamento opcional do histórico (aprovações/reprovações/contraprova/observações)
-  // para uma aba do Google Sheets (mesma planilha da premiação), usando o Apps Script
+  // Envio do histórico (aprovações/reprovações/contraprova/observações) pelo botão
+  // "Salvar" para uma aba do Google Sheets (mesma planilha da premiação), usando o Apps Script
   // que o app de premiação já usa. Para ativar: cole aqui a mesma URL "/exec" do Web
   // App (ex.: a mesma usada em SUGESTOES_WEBAPP_URL no app de premiação), depois de
   // adicionar as funções da aba "LIBERACAO_CAMADAS_HISTORICO" a esse Apps Script e
