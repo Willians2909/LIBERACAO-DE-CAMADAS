@@ -35,6 +35,8 @@ button,input,select,textarea{font:inherit}
 .sync-badge.is-saving{background:#FCEBCF;color:var(--warn);border-color:#efc77e}
 .sync-badge.is-error{background:#FBDEE5;color:var(--bad);border-color:#e5a3b4}
 body:not(.is-editor) .editor-only{display:none!important}
+body.is-editor .viewer-only{display:none!important}
+.login-hint{align-self:center;font-size:12px;font-weight:700;color:var(--muted)}
 .stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .stat{background:#f5f7f7;border:1px solid var(--line);border-radius:999px;padding:7px 11px;font-size:12px;font-weight:700}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
@@ -180,6 +182,7 @@ body:not(.is-editor) .compact-toggle:disabled:not([data-lock]){opacity:1;cursor:
   <div class="toolbar">
     <button class="btn primary editor-only" id="addFaixaBtn" type="button">+ Adicionar faixa</button>
     <button class="btn block" id="scrollPendBtn" type="button">Ver pendências antigas</button>
+    <span class="login-hint viewer-only">🔒 Faça login para editar ensaios, quadrantes e camadas.</span>
   </div>
 
   <div class="legend">
@@ -245,9 +248,10 @@ body:not(.is-editor) .compact-toggle:disabled:not([data-lock]){opacity:1;cursor:
   <div class="modal-box">
     <h3>Nova camada</h3>
     <p>A camada atual continuará salva no histórico. Se houver OE ou OD pendente, a nova camada exibirá um bloqueio herdado nessas regiões.</p>
+    <p id="newLayerHint" style="margin:0;font-weight:700;color:var(--ink)"></p>
     <div class="new-layer-grid">
       <label>Número da nova camada
-        <input type="number" id="newLayerNum">
+        <input type="text" inputmode="numeric" id="newLayerNum" placeholder="Digite o número">
       </label>
       <label>Volume (m³)
         <input type="number" id="newLayerVol" value="0">

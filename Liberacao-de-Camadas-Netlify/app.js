@@ -269,6 +269,11 @@
     }).catch(function(err){
       console.error('falha ao buscar estado', err);
       if(!isEditor) updateSyncBadge('sem conexão — tentando de novo', 'error');
+      // index.html aberto direto da pasta (duplo clique): não há servidor para ler os dados.
+      if(!state && location.protocol === 'file:'){
+        document.getElementById('root').innerHTML = '<div class="backlog-panel"><b>Este arquivo precisa do site publicado para funcionar.</b>' +
+          '<div class="note">Abra o endereço do site no Netlify, ou, para testar sem internet, abra o arquivo <b>dist/Liberacao-de-Camadas-OFFLINE.html</b>.</div></div>';
+      }
     });
   }
 
@@ -622,7 +627,8 @@
     out += '<div class="faixa-head">' +
       '<span class="faixa-title">Faixa</span>' +
       '<input class="faixa-num" data-f="numero" value="' + escapeHtml(f.numero) + '">' +
-      '<div class="meta">Histórico <select class="layer-select" data-action="switch-layer" data-keep-enabled="1">' + layerOptions + '</select></div>' +
+      '<div class="meta">Histórico <select class="layer-select" data-action="switch-layer" data-keep-enabled="1">' + layerOptions + '</select>' +
+        '<button type="button" class="btn sm editor-only" data-action="rename-layer" title="Alterar o número da camada selecionada">✏️ Nº camada</button></div>' +
       '<div class="meta">Volume <input type="number" min="0" step="1" data-f="volume" value="' + (Number(l.volume) || 0) + '"> m³</div>' +
       '<div class="meta">OAO <select data-action="oao">' +
         '<option value="SIM"' + (l.oao === 'SIM' ? ' selected' : '') + '>SIM</option>' +
@@ -814,6 +820,7 @@
       else if(action === 'move-up') moveFaixa(c.f, -1);
       else if(action === 'move-down') moveFaixa(c.f, 1);
       else if(action === 'new-layer') openNewLayer(c.f);
+      else if(action === 'rename-layer') renameLayer(c.f, c.l);
       else if(action === 'remove-faixa') removeFaixa(c.f);
     });
 
@@ -948,13 +955,35 @@
     changed(null);
   }
 
+  // O número da nova camada é sempre digitado (nada vem preenchido), para não
+  // criar camada com número errado por engano.
   function openNewLayer(f){
     var cur = currentLayer(f);
     modalFaixaId = f.id;
-    var n = Number(cur.camada);
-    document.getElementById('newLayerNum').value = isNaN(n) ? '' : n + 1;
+    document.getElementById('newLayerNum').value = '';
     document.getElementById('newLayerVol').value = 0;
+    document.getElementById('newLayerHint').textContent = 'Faixa ' + f.numero + ' — camada atual: ' + cur.camada + '.';
     document.getElementById('newLayerModal').classList.add('show');
+    setTimeout(function(){ document.getElementById('newLayerNum').focus(); }, 50);
+  }
+
+  function camadaRepetida(f, num, exceto){
+    return f.layers.some(function(x){ return x !== exceto && String(x.camada).trim() === num; });
+  }
+
+  // Corrige o número da camada selecionada no Histórico (ex.: digitado errado).
+  function renameLayer(f, l){
+    var num = prompt('Novo número para a Camada ' + l.camada + ' da Faixa ' + f.numero + ':', String(l.camada));
+    if(num === null) return;
+    num = num.trim();
+    if(!num || num === String(l.camada)) return;
+    if(camadaRepetida(f, num, l) && !confirm('A Faixa ' + f.numero + ' já tem uma Camada ' + num + '. Usar esse número mesmo assim?')) return;
+    var antigo = l.camada;
+    l.camada = num;
+    logHistorico(f, l, 'Número da camada alterado', null, 'Camada ' + antigo + ' → Camada ' + num);
+    enfileirarPlanilha([sheetsRowEvento(f, l, 'Número da camada alterado', 'Camada ' + antigo + ' → Camada ' + num)]);
+    changed(l);
+    showToast('Camada ' + antigo + ' agora é a Camada ' + num + '.');
   }
   function closeNewLayerModal(){
     document.getElementById('newLayerModal').classList.remove('show');
@@ -965,6 +994,7 @@
     if(!f){ closeNewLayerModal(); return; }
     var num = String(document.getElementById('newLayerNum').value).trim();
     if(!num){ alert('Informe o número da nova camada.'); return; }
+    if(camadaRepetida(f, num, null) && !confirm('A Faixa ' + f.numero + ' já tem uma Camada ' + num + '. Criar outra com o mesmo número?')) return;
     // consolida o histórico antes, para não perder mudanças feitas desde o último Salvar.
     commitHistorySnapshot();
     var cur = currentLayer(f);
@@ -1109,6 +1139,9 @@
     document.getElementById('oaoApplyBtn').addEventListener('click', applyOaoNao);
     document.getElementById('newLayerCancelBtn').addEventListener('click', closeNewLayerModal);
     document.getElementById('newLayerConfirmBtn').addEventListener('click', confirmNewLayer);
+    document.getElementById('newLayerNum').addEventListener('keydown', function(e){
+      if(e.key === 'Enter') confirmNewLayer();
+    });
 
     fetchState().then(function(){
       if(!isEditor) startPolling();
